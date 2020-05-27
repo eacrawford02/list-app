@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:listapp/pages/home_page.dart';
 
 void main() {
   runApp(ListApp());
@@ -7,7 +8,9 @@ void main() {
 class ListApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
-    throw UnimplementedError();
+    return MaterialApp (
+      title: "List",
+      home: HomePage(),
+    );
   }
 }
