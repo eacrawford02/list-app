@@ -6,7 +6,6 @@ class TabCollection {
   final TickerProvider _vsync;
   List<Tab> _tabs;
   List<Widget> _tabViews;
-  Widget _floatingWidget; // TODO: remove
   Map<Widget, Function> _callbacks;
   TabController _tabController;
 
@@ -27,10 +26,6 @@ class TabCollection {
     _callbacks[targetView] = callback;
   }
 
-  void setFloatingWidget(Widget floatingWidget) {
-    _floatingWidget = floatingWidget;
-  }
-
   void setController() {
     _tabController = TabController(length: _tabs.length, vsync: _vsync);
     _tabController.addListener(() {
@@ -49,14 +44,9 @@ class TabCollection {
   }
 
   Widget getTabLayout() {
-    return Stack(
-      children: <Widget>[
-        TabBarView(
-          controller: _tabController,
-          children: _tabViews,
-        ),
-        _floatingWidget
-      ],
+    return TabBarView(
+      controller: _tabController,
+      children: _tabViews,
     );
   }
 
