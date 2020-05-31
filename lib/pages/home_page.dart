@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:listapp/models/action_widget_collection.dart';
 import 'package:listapp/models/tab_collection.dart';
-import 'package:listapp/widgets/task_list_bar.dart';
+import 'package:listapp/widgets/bottom_action_bar.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -12,7 +13,7 @@ class _HomePageState extends State<HomePage>
 
   final String title = "List";
   List<IconButton> _buttons;
-  Widget _floatingWidget;
+  ActionWidgetCollection _actionBar;
   TabCollection _tabCollection;
 
   @override
@@ -23,10 +24,12 @@ class _HomePageState extends State<HomePage>
       // TODO: add icon buttons
     ];
 
+    _actionBar = ActionWidgetCollection();
+    _actionBar.addAction("button", FloatingActionButton());
+
     Container view1 = Container(color: Colors.blue);
     Container view2 = Container(color: Colors.green);
 
-    _floatingWidget = TaskListBar();
     _tabCollection = TabCollection(this);
     _tabCollection.addTab(title: "Current Tasks", view: view1);
     _tabCollection.addTab(title: "Future Tasks", view: view2);
@@ -59,7 +62,7 @@ class _HomePageState extends State<HomePage>
               },
               body: _tabCollection.getTabLayout()
           ),
-          _floatingWidget
+          _actionBar.getLayout()
         ],
       ),
     );
