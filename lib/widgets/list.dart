@@ -32,10 +32,15 @@ class ListWidgetState extends State<ListWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
+    return AnimatedList(
+      key: _key,
+      initialItemCount: _initialItems,
+      itemBuilder: _buildItem,
+    );
   }
 }
 
-abstract class IListData<T> {
+// Must be implemented by any list data model that uses this widget
+abstract class IListData<T> { // Where T is the type of data, ie. TaskData
   T getItemData(int index);
 }

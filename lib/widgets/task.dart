@@ -20,6 +20,8 @@ class TaskState extends State<Task> {
   TaskList _listModel;
   Animation<double> _animation;
   TaskData _data;
+  bool _isActive;
+  bool _isExpired;
 
   TaskState(this._listModel, this._animation, this._data);
 
@@ -34,7 +36,28 @@ class TaskState extends State<Task> {
       child: SizeTransition(
         axis: Axis.vertical,
         sizeFactor: _animation,
-        child: Card(child: Text("test")),
+        child: Card(
+          child: Row(
+            children: <Widget>[
+              Checkbox(value: false, onChanged: null),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(""),
+                    Text(
+                      "bruh",
+                      style: TextStyle(fontSize: 18),
+                    ),
+                    Text("time")
+                  ],
+                ),
+              ),
+              IconButton(icon: Icon(Icons.accessibility), onPressed: null),
+              IconButton(icon: Icon(Icons.accessibility), onPressed: null)
+            ],
+          ),
+        ),
       ),
     );
   }

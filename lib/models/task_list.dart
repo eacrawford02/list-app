@@ -1,5 +1,3 @@
-import 'dart:html';
-
 import 'package:flutter/material.dart';
 import 'package:listapp/widgets/list.dart';
 import 'package:listapp/widgets/task.dart';
@@ -11,6 +9,7 @@ class TaskList implements IListData<TaskData> {
   int _timedTail;
   int _numTasks;
   int _numCompletedTasks;
+  // TODO: _wastedTime;
   Widget _listWidget;
   SliverAnimatedListState _listWidgetState;
 
@@ -28,6 +27,10 @@ class TaskList implements IListData<TaskData> {
 
   int _loadTasks() {
     // TODO: load task data from database
+    for (int i = 0; i < 3; i++) {
+      _list.add(TaskData());
+      _numTasks++;
+    }
 
     return _numTasks;
   }
@@ -37,7 +40,7 @@ class TaskList implements IListData<TaskData> {
     _listWidgetState.insertItem(_list.length - 1);
   }
 
-  void submitTaskEdit() {
+  void submitTaskEdit(TaskData taskData) {
 
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:listapp/models/action_widget_collection.dart';
 import 'package:listapp/models/tab_collection.dart';
+import 'package:listapp/models/task_list.dart';
 import 'package:listapp/widgets/bottom_action_bar.dart';
 
 class HomePage extends StatefulWidget {
@@ -27,11 +28,11 @@ class _HomePageState extends State<HomePage>
     _actionBar = ActionWidgetCollection();
     _actionBar.addAction("button", FloatingActionButton());
 
-    Container view1 = Container(color: Colors.blue);
+    TaskList currentTasks = TaskList();
     Container view2 = Container(color: Colors.green);
 
     _tabCollection = TabCollection(this);
-    _tabCollection.addTab(title: "Current Tasks", view: view1);
+    _tabCollection.addTab(title: "Current Tasks", view: currentTasks.getLayout());
     _tabCollection.addTab(title: "Future Tasks", view: view2);
     _tabCollection.setController();
 
@@ -60,6 +61,9 @@ class _HomePageState extends State<HomePage>
                   )
                 ];
               },
+              // body parameter takes a Widget object, not a sliver (which is
+              // why we use a AnimatedList instead of a SliverAnimatedList) in
+              // the ListWidget class
               body: _tabCollection.getTabLayout()
           ),
           _actionBar.getLayout()

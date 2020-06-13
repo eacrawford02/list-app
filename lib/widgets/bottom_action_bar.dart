@@ -26,7 +26,7 @@ class _BottomActionBarState extends State<BottomActionBar> {
       right: 0,
       child: Container(
         decoration: BoxDecoration(
-          color: Color.fromRGBO(1, 0, 1, 0.5),
+          color: Color.fromRGBO(255, 0, 255, 0.5),
           borderRadius: BorderRadius.only(
               topLeft: Radius.circular(16),
               topRight: Radius.circular(16)
