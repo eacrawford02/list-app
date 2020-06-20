@@ -4,11 +4,11 @@ import 'package:listapp/models/task_list.dart';
 
 class Task extends StatefulWidget {
 
-  final TaskList listModel;
+  final ITaskList listModel;
   final Animation<double> animation;
   final TaskData taskData;
 
-  Task({this.listModel, this.animation, this.taskData, Key key})
+  Task(this.listModel, this.animation, this.taskData, Key key)
       : super(key: key);
 
   @override
@@ -17,13 +17,26 @@ class Task extends StatefulWidget {
 
 class TaskState extends State<Task> {
 
-  TaskList _listModel;
+  ITaskList _listModel;
   Animation<double> _animation;
   TaskData _data;
-  bool _isActive;
-  bool _isExpired;
+  bool _isActive = false;
+  bool _isExpired = false;
 
-  TaskState(this._listModel, this._animation, this._data);
+  TaskState(this._listModel, this._animation, this._data) {
+    TimeOfDay timeRef = TimeOfDay.now();
+    int currentTime = _data.createTimeStamp(timeRef.hour, timeRef.minute);
+    int startTime = _data.createTimeStamp(_data.startTimeH, _data.startTimeM);
+    int endTime = _data.createTimeStamp(_data.endTimeH, _data.endTimeM);
+    // Determine whether or not the task is active or expired
+    if (currentTime >= startTime) {
+      _isActive = true;
+      if (currentTime >= endTime) {
+        _isActive = false;
+        _isExpired = true;
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +67,9 @@ class TaskState extends State<Task> {
                 ),
               ),
               IconButton(icon: Icon(Icons.accessibility), onPressed: null),
-              IconButton(icon: Icon(Icons.accessibility), onPressed: null)
+              IconButton(icon: Icon(Icons.accessibility), onPressed: () {
+                _listModel.removeTask(_data);
+              })
             ],
           ),
         ),
@@ -65,11 +80,37 @@ class TaskState extends State<Task> {
 
 class TaskData {
 
-  int id;
+  final int id;
   bool isDone;
   String text;
-  TimeOfDay startTime;
-  TimeOfDay endTime;
+  bool isScheduled;
+  int startTimeH;
+  int startTimeM;
+  int endTimeH;
+  int endTimeM;
 
-  TaskData({this.id, this.isDone, this.text, this.startTime, this.endTime});
+  TaskData({
+    @required this.id,
+    this.isDone : false,
+    this.text : "Edit Task",
+    this.isScheduled,
+    this.startTimeH : 0,
+    this.startTimeM : 0,
+    this.endTimeH : 0,
+    this.endTimeM : 0
+  });
+
+  int createTimeStamp(int hour, int minute) {
+    return (hour * 100) + minute;
+  }
+}
+
+abstract class ITaskList {
+  void submitTaskEdit(TaskData data);
+
+  void moveToTop(TaskData data);
+
+  void moveToBottom(TaskData data);
+
+  void removeTask(TaskData data);
 }

@@ -3,6 +3,7 @@ import 'package:listapp/models/action_widget_collection.dart';
 import 'package:listapp/models/tab_collection.dart';
 import 'package:listapp/models/task_list.dart';
 import 'package:listapp/widgets/bottom_action_bar.dart';
+import 'package:listapp/widgets/task.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -25,10 +26,15 @@ class _HomePageState extends State<HomePage>
       // TODO: add icon buttons
     ];
 
-    _actionBar = ActionWidgetCollection();
-    _actionBar.addAction("button", FloatingActionButton());
-
+    // TODO: replace/fix all this stuff
     TaskList currentTasks = TaskList();
+
+
+    _actionBar = ActionWidgetCollection();
+    _actionBar.addAction("button", FloatingActionButton(
+        onPressed: currentTasks.addNewTask
+    ));
+
     Container view2 = Container(color: Colors.green);
 
     _tabCollection = TabCollection(this);
