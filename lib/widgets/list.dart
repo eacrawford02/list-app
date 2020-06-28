@@ -33,6 +33,10 @@ class ListWidgetState extends State<ListWidget> {
 
   Widget _removeItem(Widget widget) => widget;
 
+  void refresh() {
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedList(

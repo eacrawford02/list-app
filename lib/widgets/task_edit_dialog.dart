@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:listapp/widgets/task.dart';
+import 'package:listapp/models/task_data.dart';
 
 class TaskEditDialog extends StatefulWidget {
 
@@ -34,20 +34,23 @@ class TaskEditDialogState extends State<TaskEditDialog> {
     }
   }
 
-  void _saveData() {
+  TaskData _saveData() {
     if (_text == null)
-      return;
+      return _taskData;
 
-    _taskData.isSet = true;
+    TaskData newData = TaskData(id: _taskData.id);
+
+    newData.isSet = true;
     if (_startTime != null || _endTime != null) {
-      _taskData.isScheduled = true;
+      newData.isScheduled = true;
     }
 
-    _taskData.text = _text;
-    _taskData.startTime = _startTime;
-    _taskData.endTime = _endTime;
-    _taskData.repeatDays = _repeatDays;
-    _taskData.date = _date;
+    newData.text = _text;
+    newData.startTime = _startTime;
+    newData.endTime = _endTime;
+    newData.repeatDays = _repeatDays;
+    newData.date = _date;
+    return newData;
   }
 
   @override
@@ -72,9 +75,7 @@ class TaskEditDialogState extends State<TaskEditDialog> {
                       decoration: InputDecoration(
                           hintText: _taskData.isSet ? "" : "E.g. Go for a run"
                       ),
-                      maxLines: null,
                       onSubmitted: (String value) {
-                        print(value);
                         _text = value;
                       }
                   )
@@ -94,12 +95,12 @@ class TaskEditDialogState extends State<TaskEditDialog> {
             ),
             OutlineButton(
               child: Text(
-                  _startTime == null ? "Not Set" : _taskData.timeToString(_startTime)
+                  _startTime == null ? "Not Set" : TaskData.timeToString(_startTime)
               ),
               onPressed: () async {
                 _startTime = await showTimePicker(
                   context: context,
-                  initialTime: TimeOfDay.now()
+                  initialTime: _startTime != null ? _startTime : TimeOfDay.now()
                 );
                 setState(() {});
               }
@@ -111,12 +112,12 @@ class TaskEditDialogState extends State<TaskEditDialog> {
             ),
             OutlineButton(
                 child: Text(
-                    _endTime == null ? "Not Set" : _taskData.timeToString(_endTime)
+                    _endTime == null ? "Not Set" : TaskData.timeToString(_endTime)
                 ),
                 onPressed: () async {
                   _endTime = await showTimePicker(
                       context: context,
-                      initialTime: TimeOfDay.now()
+                      initialTime: _endTime != null ? _endTime : TimeOfDay.now()
                   );
                   setState(() {});
                 }
@@ -151,7 +152,7 @@ class TaskEditDialogState extends State<TaskEditDialog> {
               ),
               OutlineButton(
                   child: Text(
-                      _date == null ? "Not Set" : _taskData.dateToString(_date)
+                      _date == null ? "Not Set" : TaskData.dateToString(_date)
                   ),
                   onPressed: () async {
                     _date = await showDatePicker(
@@ -175,8 +176,7 @@ class TaskEditDialogState extends State<TaskEditDialog> {
         FlatButton(
           child: Text("Save"),
           onPressed: () {
-            _saveData();
-            Navigator.of(context).pop();
+            Navigator.of(context).pop(_saveData());
           }
         )
       ],

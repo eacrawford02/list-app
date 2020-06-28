@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:listapp/widgets/task_edit_dialog.dart';
+import 'package:listapp/models/task_data.dart';
 
 class Task extends StatefulWidget {
 
@@ -24,30 +25,37 @@ class TaskState extends State<Task> {
   bool _isExpired = false;
 
   TaskState(this._listModel, this._animation, this._data) {
+    _updateStatus();
+  }
+
+  void _updateStatus() {
     if (_data.isScheduled) {
       TimeOfDay timeRef = TimeOfDay.now();
-      int currentTime = _data.createTimeStamp(timeRef.hour, timeRef.minute);
+      int currentTime = TaskData.createTimeStamp(timeRef.hour, timeRef.minute);
       // Determine whether or not the task is active or expired
       if (_data.startTime != null) {
-        int startTime = _data.createTimeStamp(
+        int startTime = TaskData.createTimeStamp(
             _data.startTime.hour, _data.startTime.minute);
         if (currentTime >= startTime) {
           _isActive = true;
         }
+        else {
+          _isActive = false;
+        }
       }
       if (_data.endTime != null) {
-        int endTime = _data.createTimeStamp(
+        int endTime = TaskData.createTimeStamp(
             _data.endTime.hour, _data.endTime.minute);
         if (currentTime >= endTime) {
           _isActive = false;
           _isExpired = true;
         }
+        else {
+          _isActive = true;
+          _isExpired = false;
+        }
       }
     }
-  }
-
-  void updateStatus() {
-
   }
 
   void onChecked(bool) {
@@ -57,15 +65,35 @@ class TaskState extends State<Task> {
   }
 
   void showEditDialog(BuildContext context) async {
-    await showDialog(
+    TaskData newData = await showDialog<TaskData>(
       context: context,
       builder: (BuildContext context) => TaskEditDialog(_data)
     );
-    if (_data.isSet) {
+    if (newData.isSet) {
       setState(() {
-        // TODO: check if status has changed (active/expired)
-        _listModel.submitTaskEdit(_data);
+        _data = newData;
+        _updateStatus();
+        _listModel.submitTaskEdit(newData);
       });
+    }
+  }
+
+  String get _displayTime {
+    if (_data.startTime != null && _data.endTime != null) {
+      String start = TaskData.timeToString(_data.startTime);
+      String end = TaskData.timeToString(_data.endTime);
+      return "$start - $end";
+    }
+    else if (_data.startTime != null) {
+      String start = TaskData.timeToString(_data.startTime);
+      return "$start";
+    }
+    else if (_data.endTime != null) {
+      String end = TaskData.timeToString(_data.endTime);
+      return "Until $end";
+    }
+    else {
+      return "";
     }
   }
 
@@ -96,7 +124,7 @@ class TaskState extends State<Task> {
                   ),
                   child: Checkbox(
                       value: _data.isDone,
-                      onChanged: _data.isSet || _isExpired ? onChecked : null,
+                      onChanged: _data.isSet && !_isExpired ? onChecked : null,
                   ),
                 ),
                 Expanded(
@@ -111,10 +139,14 @@ class TaskState extends State<Task> {
                           ),
                           child: Text(
                             _data.text,
-                            style: TextStyle(fontSize: 18),
+                            style: TextStyle(
+                              fontSize: 18,
+                              decoration: _isExpired ?
+                                TextDecoration.lineThrough : TextDecoration.none
+                            ),
                           )
                       ),
-                      Text("time")
+                      Text("$_displayTime")
                     ],
                   ),
                 ),
@@ -136,70 +168,6 @@ class TaskState extends State<Task> {
         ),
       ),
     );
-  }
-}
-
-class TaskData {
-
-  final int id;
-  bool isSet = false;
-  bool isDone;
-  String text;
-  bool isScheduled;
-  TimeOfDay startTime;
-  TimeOfDay endTime;
-  List<bool> repeatDays = List.filled(7, false);
-  DateTime date;
-
-  TaskData({
-    @required this.id,
-    this.isDone : false,
-    this.text : "Edit Task",
-    this.isScheduled : false,
-    this.startTime,
-    this.endTime,
-    this.date
-  });
-
-  int createTimeStamp(int hour, int minute) {
-    return (hour * 100) + minute;
-  }
-
-  String timeToString(TimeOfDay timeOfDay) {
-    int hour = timeOfDay.hour;
-    int minute = timeOfDay.minute;
-    String mm = "$minute";
-    if (minute < 10) {
-      mm = "0$minute";
-    }
-    if (hour == 0) {
-      return "12:$mm AM";
-    }
-    else if (hour < 12) {
-      return "$hour:$mm AM";
-    }
-    else if (hour == 12) {
-      return "12:$mm PM";
-    }
-    else {
-      int h = hour - 12;
-      return "$h:$mm PM";
-    }
-  }
-
-  String dateToString(DateTime date) {
-    int year = date.year;
-    int month = date.month;
-    int day = date.day;
-    String mm = "$month";
-    String dd = "$day";
-    if (month < 10) {
-      mm = "0$month";
-    }
-    if (day < 10) {
-      dd = "0$day";
-    }
-    return "$year-$mm-$dd";
   }
 }
 
