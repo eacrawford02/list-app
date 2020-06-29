@@ -53,5 +53,7 @@ abstract class IListData<T> { // Where T is the type of data, ie. TaskData
 
   void setItemRemover(Function function);
 
+  void setRefreshCallback(Function function);
+
   Widget getItemWidget(int index, Animation<double> animation);
 }

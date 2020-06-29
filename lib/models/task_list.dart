@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
 import 'package:listapp/widgets/list.dart';
 import 'package:listapp/widgets/task.dart';
 import 'package:listapp/models/task_data.dart';
@@ -22,6 +24,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
   // bs going on behind the scenes
   AnimatedListState get _listWidgetState => _key.currentState;
   dynamic _removeItemCallback;
+  Function _refreshListWidget;
 
   TaskList() {
     _list = List();
@@ -30,11 +33,12 @@ class TaskList implements IListData<TaskData>, ITaskList {
     _numTasks = 0;
     _numCompletedTasks = 0;
 
-    _listWidget = ListWidget(this, _key, _loadTasks());
+    _listWidget = ListWidget(this, _key, _loadData());
   }
 
-  int _loadTasks() {
+  int _loadData() {
     // TODO: load task data from database
+
 
     return _numTasks;
   }
@@ -54,12 +58,9 @@ class TaskList implements IListData<TaskData>, ITaskList {
     // If first scheduled task in the list
     if (_timedHead == _timedTail) {
       _list.insert(_timedHead, data);
-      print(_timedTail);
       _timedTail++;
       return;
     }
-    print(_timedHead);
-    print(_timedTail);
     for (int i = _timedHead; i <= _timedTail; i++) {
       // If the end of the list has been reached
       if (i == _timedTail) {
@@ -73,7 +74,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
             getTime(i).hour,
             getTime(i).minute
         );
-        if (timeStamp > indexTimeStamp) {
+        if (timeStamp < indexTimeStamp) {
           _list.insert(i, data);
           _timedTail++;
           return;
@@ -84,9 +85,6 @@ class TaskList implements IListData<TaskData>, ITaskList {
 
   void addNewTask({TaskData taskData}) {
     _list.add(taskData ?? TaskData(id: DateTime.now().millisecondsSinceEpoch));
-    for (int i = 0; i < _list.length; i++) {
-      print(_list[i].text);
-    }
     _listWidgetState.insertItem(_list.length - 1);
   }
 
@@ -100,9 +98,6 @@ class TaskList implements IListData<TaskData>, ITaskList {
     // outside the range of the list where its removal would have any impact on
     // the timed head or tail, or the number of tasks in the list
     int prevPos = _seek(taskData);
-    // First, though, we have to increment numTasks if this is a newly edited
-    // task
-    print(_list[prevPos].text);
     if (_list[prevPos].isSet) {
       _numTasks++;
       if (prevPos < _timedHead) {
@@ -113,13 +108,17 @@ class TaskList implements IListData<TaskData>, ITaskList {
         _timedTail--;
       }
     }
+    // If, however, this is a newly edited task, then we must increment the
+    // number of tasks
+    else {
+      _numTasks++;
+    }
     _list.removeAt(prevPos);
     // Now we can sort and insert the new task
     if (taskData.isScheduled) {
       // If the task is given a start time, then sort it based on that
       if (taskData.startTime != null) {
         _timeSort(taskData, taskData.startTime, (index) {
-          print(_list[index].text);
           return _list[index].startTime;
         });
       }
@@ -133,23 +132,54 @@ class TaskList implements IListData<TaskData>, ITaskList {
     else {
       _list.insert(_numTasks - 1, taskData);
     }
+    _refreshListWidget.call();
     print("length");
     print(_list.length);
+    print(_numTasks);
 
     // TODO: add task data to database
   }
 
   @override
   void moveToTop(TaskData data) {
-    _list.removeAt(_seek(data));
+    int pos = _seek(data);
+    if (pos >= _timedHead && pos < _timedTail) {
+      throw Exception("Can't move scheduled task to the top");
+    }
+    else if (pos >= _timedTail) {
+      _timedHead++;
+      _timedTail++;
+    }
+    // TODO: fix
+    _list.removeAt(pos);
     _list.insert(0, data);
-    removeTask(data);
     _listWidgetState.insertItem(0);
+
+    // TODO: Save changes to database
   }
 
   @override
   void moveToBottom(TaskData data) {
-    // TODO: implement moveToBottom
+    int pos = _seek(data);
+    if (pos >= _timedHead && pos < _timedTail) {
+      throw Exception("Can't move scheduled task to the bottom");
+    }
+    else if (pos < _timedHead) {
+      _timedHead--;
+      _timedTail--;
+    }
+    // TODO: fix
+    _list.removeAt(pos);
+    _listWidgetState.removeItem(
+        pos,
+            (context, animation) => _removeItemCallback(
+            Task(this, animation, data, UniqueKey())
+        )
+    );
+    _list.insert(_numTasks - 1, data);
+    _listWidgetState.insertItem(0);
+
+    // TODO: Save changes to database
   }
 
   @override
@@ -176,6 +206,11 @@ class TaskList implements IListData<TaskData>, ITaskList {
   @override
   void setItemRemover(Function function) {
     this._removeItemCallback = function;
+  }
+
+  @override
+  void setRefreshCallback(Function function) {
+    this._refreshListWidget = function;
   }
 
   // Returns a Task object already loaded with the data that was added to the
