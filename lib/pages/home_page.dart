@@ -17,6 +17,8 @@ class _HomePageState extends State<HomePage>
   List<IconButton> _buttons;
   ActionWidgetCollection _actionBar;
   TabCollection _tabCollection;
+  TaskList _currentTasks;
+  Future _initializing;
 
   @override
   void initState() {
@@ -27,20 +29,24 @@ class _HomePageState extends State<HomePage>
     ];
 
     // TODO: replace/fix all this stuff
-    TaskList currentTasks = TaskList();
+    _currentTasks = TaskList();
+    _currentTasks.init();
+    _tabCollection = TabCollection(this);
+    _tabCollection.addTab(
+        title: "Current Tasks",
+        view: _currentTasks.getLayout()
+    );
+
+    Container view2 = Container(color: Colors.green);
+    _tabCollection.addTab(title: "Future Tasks", view: view2);
+    _tabCollection.setController();
 
 
     _actionBar = ActionWidgetCollection();
     _actionBar.addAction("button", FloatingActionButton(
-        onPressed: currentTasks.addNewTask
+        onPressed: _currentTasks.addNewTask
     ));
 
-    Container view2 = Container(color: Colors.green);
-
-    _tabCollection = TabCollection(this);
-    _tabCollection.addTab(title: "Current Tasks", view: currentTasks.getLayout());
-    _tabCollection.addTab(title: "Future Tasks", view: view2);
-    _tabCollection.setController();
 
     // TODO: set controller
   }

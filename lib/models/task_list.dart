@@ -4,14 +4,17 @@ import 'package:path/path.dart';
 import 'package:listapp/widgets/list.dart';
 import 'package:listapp/widgets/task.dart';
 import 'package:listapp/models/task_data.dart';
+import 'package:listapp/utils/save_manager.dart';
 
 typedef _GetTimeFunction = TimeOfDay Function(int index);
 
 class TaskList implements IListData<TaskData>, ITaskList {
 
+  SaveManager _saveManager;
   List<TaskData> _list;
-  int _timedHead;
-  int _timedTail;
+  DateTime _listDate;
+  int _timedHead; // Inclusive
+  int _timedTail; // Inclusive
   int _numTasks;
   int _numCompletedTasks;
   // TODO: _wastedTime;
@@ -28,19 +31,98 @@ class TaskList implements IListData<TaskData>, ITaskList {
 
   TaskList() {
     _list = List();
+    _listDate = DateTime.now();
     _timedHead = 0;
     _timedTail = 0;
     _numTasks = 0;
     _numCompletedTasks = 0;
-
-    _listWidget = ListWidget(this, _key, _loadData());
   }
 
-  int _loadData() {
-    // TODO: load task data from database
+  Future<void> init() async {
+    _saveManager = await SaveManager.getManager();
+    Future<void> initialized = _loadData();
+    _listWidget = ListWidget(this, _key, initialized, _numTasks);
+    // Now that the list model has completed initialization, refresh the list
+    // widget
+    initialized.then((value) => _refreshListWidget.call());
+  }
 
-
-    return _numTasks;
+  Future<void> _loadData() async {
+    // Load task data from database
+    String date = TaskData.dateToString(_listDate);
+    List<TaskData> scheduledTasks = await _saveManager.loadScheduledTasks(date);
+    List<TaskData> repeatTasks = await _saveManager.loadRepeatTasks(date,
+        _listDate.weekday);
+    // We must check each repeating task in the list of scheduled tasks
+    // against the list of repeating tasks in order to account for tasks that
+    // have been set to no longer repeat on this day of the week. These tasks
+    // must then be removed from the scheduled tasks list
+    for (int i = 0; i < scheduledTasks.length; i++) {
+      // Update number of completed tasks with each step in the list
+      bool taskComplete = scheduledTasks[i].isDone;
+      if (taskComplete) {
+        _numCompletedTasks++;
+      }
+      // Set head and tail values prior to modifying list
+      if (i != 0) {
+        if (scheduledTasks[i].isScheduled &&
+            !scheduledTasks[i - 1].isScheduled) {
+          _timedHead = i;
+        }
+        else if (!scheduledTasks[i].isScheduled &&
+            scheduledTasks[i - 1].isScheduled) {
+          _timedTail = i - 1;
+        }
+        else if (i == scheduledTasks.length - 1 &&
+            scheduledTasks[i].isScheduled) {
+          _timedTail = i;
+        }
+      }
+      // Otherwise just leave the default values of 0 and 0
+      // Perform check
+      if (scheduledTasks[i].repeatDays.contains(true)) {
+        int id = scheduledTasks[i].id;
+        bool present = false;
+        for (int n = 0; n < repeatTasks.length; n++) {
+          if (repeatTasks[n].id == id) {
+            present = true;
+            break;
+          }
+        }
+        if (!present) {
+          if (taskComplete) {
+            _numCompletedTasks--;
+          }
+          scheduledTasks.removeAt(i);
+          if (i < _timedHead) {
+            _timedHead--;
+            _timedTail--;
+          }
+          else if (i <= _timedTail) {
+            _timedTail--;
+          }
+        }
+      }
+    }
+    // Compare each repeating task against list of scheduled tasks and insert
+    // when necessary to avoid duplication
+    _list = scheduledTasks; // Allows us to use the _addToList function
+    for (int i = 0; i < repeatTasks.length; i++) {
+      int id = repeatTasks[i].id;
+      bool present = false;
+      for (int n = 0; n < scheduledTasks.length; n++) {
+        if (scheduledTasks[n].id == id) {
+          present = true;
+          break;
+        }
+      }
+      if (!present) {
+        _addToList(repeatTasks[i]);
+      }
+    }
+    _numTasks = _list.length;
+    // Update saved indices for each task in the newly constructed list
+    _saveManager.updateIndices(date, _list, 0, _list.length - 1);
   }
 
   int _seek(TaskData data) {
@@ -51,6 +133,27 @@ class TaskList implements IListData<TaskData>, ITaskList {
     }
     String text = data.text;
     throw Exception("Item '$text' not found in list");
+  }
+
+  void _addToList(TaskData data) {
+    // Sort and insert the task data
+    if (data.isScheduled) {
+      // If the task is given a start time, then sort it based on that
+      if (data.startTime != null) {
+        _timeSort(data, data.startTime, (index) {
+          return _list[index].startTime;
+        });
+      }
+      // If not (only given an end time), then sort it based on the end time
+      else {
+        _timeSort(data, data.endTime, (index) {
+          return _list[index].endTime;
+        });
+      }
+    }
+    else {
+      _list.insert(_numTasks - 1, data);
+    }
   }
 
   void _timeSort(TaskData data, TimeOfDay taskTime, _GetTimeFunction getTime) {
@@ -114,30 +217,24 @@ class TaskList implements IListData<TaskData>, ITaskList {
       _numTasks++;
     }
     _list.removeAt(prevPos);
-    // Now we can sort and insert the new task
-    if (taskData.isScheduled) {
-      // If the task is given a start time, then sort it based on that
-      if (taskData.startTime != null) {
-        _timeSort(taskData, taskData.startTime, (index) {
-          return _list[index].startTime;
-        });
-      }
-      // If not (only given an end time), then sort it based on the end time
-      else {
-        _timeSort(taskData, taskData.endTime, (index) {
-          return _list[index].endTime;
-        });
-      }
-    }
-    else {
-      _list.insert(_numTasks - 1, taskData);
+    // Now we can add the task to the list, but not if it is set to repeat on a
+    // day other than today
+    if (taskData.repeatDays[_listDate.weekday]) {
+      _addToList(taskData);
     }
     _refreshListWidget.call();
     print("length");
     print(_list.length);
     print(_numTasks);
 
-    // TODO: add task data to database
+    // Add task data to database and update indices
+    _saveManager.saveTask(taskData, index: _seek(taskData));
+    _saveManager.updateIndices( // TODO: improve selection
+        TaskData.dateToString(_listDate),
+        _list,
+        0,
+        _list.length - 1
+    );
   }
 
   @override
@@ -183,18 +280,27 @@ class TaskList implements IListData<TaskData>, ITaskList {
   }
 
   @override
-  void removeTask(TaskData data) {
-    int index = _seek(data);
+  void removeTask(TaskData taskData) {
+    int index = _seek(taskData);
     _list.removeAt(index);
-    if (data.isSet) {
+    if (taskData.isSet) {
       _numTasks--;
     }
 
     _listWidgetState.removeItem(
         index,
         (context, animation) => _removeItemCallback(
-            Task(this, animation, data, UniqueKey())
+            Task(this, animation, taskData, UniqueKey())
         )
+    );
+
+    // Save changes to database and update indices
+    _saveManager.deleteTask(taskData);
+    _saveManager.updateIndices(
+        TaskData.dateToString(_listDate),
+        _list,
+        index,
+        _list.length - 1
     );
   }
 

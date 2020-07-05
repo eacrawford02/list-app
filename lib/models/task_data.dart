@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class TaskData {
 
   final int id;
-  bool isSet = false;
+  bool isSet;
   bool isDone;
   String text;
   bool isScheduled;
@@ -14,6 +14,7 @@ class TaskData {
 
   TaskData({
     @required this.id,
+    this.isSet : false,
     this.isDone : false,
     this.text : "Edit Task",
     this.isScheduled : false,
@@ -60,6 +61,6 @@ class TaskData {
     if (day < 10) {
       dd = "0$day";
     }
-    return "$year-$mm-$dd";
+    return "${year}_${mm}_$dd";
   }
 }

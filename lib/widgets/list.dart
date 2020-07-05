@@ -5,12 +5,14 @@ class ListWidget extends StatefulWidget {
 
   final IListData _listModel;
   final GlobalKey<AnimatedListState> _key;
+  final Future<void> _initialized;
   final int _initialItems;
 
-  ListWidget(this._listModel, this._key, this._initialItems);
+  ListWidget(this._listModel, this._key, this._initialized, this._initialItems);
 
   @override
-  ListWidgetState createState() => ListWidgetState(_listModel, _initialItems);
+  ListWidgetState createState() =>
+      ListWidgetState(_listModel,_initialized , _initialItems);
 }
 
 class ListWidgetState extends State<ListWidget> {
@@ -20,11 +22,14 @@ class ListWidgetState extends State<ListWidget> {
   // be created in the state class otherwise trying to access it via the
   // currentState property will return null
   final GlobalKey<AnimatedListState> _key = GlobalKey<AnimatedListState>();
+  final Future<void> _initialized;
   final int _initialItems;
 
-  ListWidgetState(this._listModel, this._initialItems) {
+  ListWidgetState(this._listModel, this._initialized, this._initialItems) {
+    throw Exception("bruh");
     _listModel.setKey(_key);
     _listModel.setItemRemover(_removeItem);
+    _listModel.setRefreshCallback(_refresh);
   }
 
   Widget _buildItem(BuildContext context, int index, Animation<double> animation) {
@@ -33,16 +38,33 @@ class ListWidgetState extends State<ListWidget> {
 
   Widget _removeItem(Widget widget) => widget;
 
-  void refresh() {
+  void _refresh() {
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedList(
-      key: _key,
-      initialItemCount: _initialItems,
-      itemBuilder: _buildItem,
+    return FutureBuilder(
+      future: _initialized,
+      builder: (BuildContext context, AsyncSnapshot snapshot) {
+        if (snapshot.connectionState == ConnectionState.done) {
+          return AnimatedList(
+            key: _key,
+            initialItemCount: _initialItems,
+            itemBuilder: _buildItem,
+          );
+        }
+        else {
+          return Container(
+            alignment: Alignment.center,
+            child: SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(),
+            )
+          );
+        }
+      }
     );
   }
 }

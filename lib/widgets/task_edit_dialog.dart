@@ -154,12 +154,15 @@ class TaskEditDialogState extends State<TaskEditDialog> {
                   child: Text(
                       _date == null ? "Not Set" : TaskData.dateToString(_date)
                   ),
+                  // TODO: date cannot be set if task is set to repeat
                   onPressed: () async {
                     _date = await showDatePicker(
                         context: context,
-                        initialDate: DateTime.now(),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(Duration(days: 36500))
+                        initialDate: _date != null ? _date : DateTime.now(),
+                        firstDate: _date != null ? _date : DateTime.now(),
+                        lastDate: _date != null ?
+                            _date.add(Duration(days: 36500)) :
+                            DateTime.now().add(Duration(days: 36500))
                     );
                     setState(() {});
                   }
