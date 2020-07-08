@@ -16,6 +16,8 @@ class TaskEditDialogState extends State<TaskEditDialog> {
 
   final TaskData _taskData;
   TextEditingController _textController = TextEditingController();
+  String _error = "";
+  bool _isDone;
   String _text;
   TimeOfDay _startTime;
   TimeOfDay _endTime;
@@ -23,6 +25,7 @@ class TaskEditDialogState extends State<TaskEditDialog> {
   DateTime _date;
 
   TaskEditDialogState(this._taskData) {
+    _isDone = _taskData.isDone;
     _startTime = _taskData.startTime;
     _endTime = _taskData.endTime;
     _repeatDays = _taskData.repeatDays;
@@ -34,8 +37,8 @@ class TaskEditDialogState extends State<TaskEditDialog> {
     }
   }
 
-  TaskData _saveData() {
-    if (_text == null)
+  TaskData _saveData(bool saveSuccess) {
+    if (_text == null || !saveSuccess)
       return _taskData;
 
     TaskData newData = TaskData(id: _taskData.id);
@@ -45,6 +48,7 @@ class TaskEditDialogState extends State<TaskEditDialog> {
       newData.isScheduled = true;
     }
 
+    newData.isDone = _isDone;
     newData.text = _text;
     newData.startTime = _startTime;
     newData.endTime = _endTime;
@@ -152,34 +156,61 @@ class TaskEditDialogState extends State<TaskEditDialog> {
               ),
               OutlineButton(
                   child: Text(
-                      _date == null ? "Not Set" : TaskData.dateToString(_date)
+                      TaskData.dateToString(_date) ==
+                          TaskData.dateToString(DateTime.now()) ?
+                      "Today" :
+                      TaskData.dateToString(_date).replaceAll(RegExp(r"_"), "-")
                   ),
                   // TODO: date cannot be set if task is set to repeat
                   onPressed: () async {
                     _date = await showDatePicker(
                         context: context,
-                        initialDate: _date != null ? _date : DateTime.now(),
-                        firstDate: _date != null ? _date : DateTime.now(),
-                        lastDate: _date != null ?
-                            _date.add(Duration(days: 36500)) :
-                            DateTime.now().add(Duration(days: 36500))
-                    );
+                        initialDate: _date,
+                        firstDate: _date,
+                        lastDate: _date.add(Duration(days: 36500))
+                    ) ?? _date;
                     setState(() {});
                   }
               )
             ])
+          ),
+          Container(
+            alignment: Alignment.bottomCenter,
+            padding: const EdgeInsets.only(top: 32),
+            child: Text(
+                _error,
+              style: TextStyle(fontSize: 10, color: Colors.red),
+            )
           )
         ],
       ),
       actions: <Widget>[
         FlatButton(
           child: Text("Cancel"),
-          onPressed: () => Navigator.of(context).pop()
+          onPressed: () => Navigator.of(context).pop(_saveData(false))
         ),
         FlatButton(
           child: Text("Save"),
           onPressed: () {
-            Navigator.of(context).pop(_saveData());
+            int start;
+            int end;
+            if (_startTime != null && _endTime != null) {
+              start =
+                  TaskData.createTimeStamp(_startTime.hour, _startTime.minute);
+              end = TaskData.createTimeStamp(_endTime.hour, _endTime.minute);
+            }
+            else {
+              start = 0;
+              end = 0;
+            }
+            if (start > end) {
+              setState(() {
+                _error = "Error: The task can't end before it starts!";
+              });
+            }
+            else {
+              Navigator.of(context).pop(_saveData(true));
+            }
           }
         )
       ],

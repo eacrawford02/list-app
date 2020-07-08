@@ -20,8 +20,8 @@ class TaskData {
     this.isScheduled : false,
     this.startTime,
     this.endTime,
-    this.date
-  });
+    DateTime date
+  }) : this.date = date ?? DateTime.now();
 
   static int createTimeStamp(int hour, int minute) {
     return (hour * 100) + minute;

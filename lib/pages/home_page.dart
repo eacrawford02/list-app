@@ -18,7 +18,6 @@ class _HomePageState extends State<HomePage>
   ActionWidgetCollection _actionBar;
   TabCollection _tabCollection;
   TaskList _currentTasks;
-  Future _initializing;
 
   @override
   void initState() {
@@ -30,10 +29,9 @@ class _HomePageState extends State<HomePage>
 
     // TODO: replace/fix all this stuff
     _currentTasks = TaskList();
-    _currentTasks.init();
     _tabCollection = TabCollection(this);
     _tabCollection.addTab(
-        title: "Current Tasks",
+        title: "Today's Tasks",
         view: _currentTasks.getLayout()
     );
 

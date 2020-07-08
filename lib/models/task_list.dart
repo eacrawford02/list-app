@@ -36,15 +36,21 @@ class TaskList implements IListData<TaskData>, ITaskList {
     _timedTail = 0;
     _numTasks = 0;
     _numCompletedTasks = 0;
+
+    _listWidget = ListWidget(this, _key, _numTasks);
+    // TODO: clean up print statements
   }
 
-  Future<void> init() async {
+  Future<void> _init() async {
     _saveManager = await SaveManager.getManager();
-    Future<void> initialized = _loadData();
-    _listWidget = ListWidget(this, _key, initialized, _numTasks);
+    await _loadData().then((value) {
+      // The callback might be null if the list widget has not already been
+      // built. Calling this (if the list widget has already been built) allows
+      // us to rebuild it with the correct number of initial tasks
+      _refreshListWidget?.call();
+    });
     // Now that the list model has completed initialization, refresh the list
     // widget
-    initialized.then((value) => _refreshListWidget.call());
   }
 
   Future<void> _loadData() async {
@@ -52,12 +58,13 @@ class TaskList implements IListData<TaskData>, ITaskList {
     String date = TaskData.dateToString(_listDate);
     List<TaskData> scheduledTasks = await _saveManager.loadScheduledTasks(date);
     List<TaskData> repeatTasks = await _saveManager.loadRepeatTasks(date,
-        _listDate.weekday);
+        _listDate.weekday - 1);
     // We must check each repeating task in the list of scheduled tasks
     // against the list of repeating tasks in order to account for tasks that
     // have been set to no longer repeat on this day of the week. These tasks
     // must then be removed from the scheduled tasks list
     for (int i = 0; i < scheduledTasks.length; i++) {
+      print(scheduledTasks[i].text);
       // Update number of completed tasks with each step in the list
       bool taskComplete = scheduledTasks[i].isDone;
       if (taskComplete) {
@@ -69,7 +76,9 @@ class TaskList implements IListData<TaskData>, ITaskList {
             !scheduledTasks[i - 1].isScheduled) {
           _timedHead = i;
         }
-        else if (!scheduledTasks[i].isScheduled &&
+        // If instead of else if is used in the line below because one task can
+        // be both the head and the tail
+        if (!scheduledTasks[i].isScheduled &&
             scheduledTasks[i - 1].isScheduled) {
           _timedTail = i - 1;
         }
@@ -103,10 +112,14 @@ class TaskList implements IListData<TaskData>, ITaskList {
           }
         }
       }
-    }
+    }print("----------------------------------------");
     // Compare each repeating task against list of scheduled tasks and insert
     // when necessary to avoid duplication
     _list = scheduledTasks; // Allows us to use the _addToList function
+    _numTasks = _list.length;
+    for (int i = 0; i < _list.length; i++) {
+      print(_list[i].text);
+    }
     for (int i = 0; i < repeatTasks.length; i++) {
       int id = repeatTasks[i].id;
       bool present = false;
@@ -117,10 +130,13 @@ class TaskList implements IListData<TaskData>, ITaskList {
         }
       }
       if (!present) {
+        print("----------------------------------------");
+        print(repeatTasks[i].text);
+        _numTasks++;
         _addToList(repeatTasks[i]);
       }
     }
-    _numTasks = _list.length;
+    print("list length is ${_list.length}");
     // Update saved indices for each task in the newly constructed list
     _saveManager.updateIndices(date, _list, 0, _list.length - 1);
   }
@@ -135,7 +151,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
     throw Exception("Item '$text' not found in list");
   }
 
-  void _addToList(TaskData data) {
+  void _addToList(TaskData data, {int prevPos}) {
     // Sort and insert the task data
     if (data.isScheduled) {
       // If the task is given a start time, then sort it based on that
@@ -152,7 +168,12 @@ class TaskList implements IListData<TaskData>, ITaskList {
       }
     }
     else {
-      _list.insert(_numTasks - 1, data);
+      if (prevPos != null && prevPos != _list.length) {
+        _list.insert(prevPos, data);
+      }
+      else {
+        _list.insert(_numTasks - 1, data);
+      }
     }
   }
 
@@ -164,6 +185,8 @@ class TaskList implements IListData<TaskData>, ITaskList {
       _timedTail++;
       return;
     }
+    print("head $_timedHead");
+    print("tail $_timedTail");
     for (int i = _timedHead; i <= _timedTail; i++) {
       // If the end of the list has been reached
       if (i == _timedTail) {
@@ -173,6 +196,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
       }
       // Perform normal sort
       else {
+        print("object bruh");
         int indexTimeStamp = TaskData.createTimeStamp(
             getTime(i).hour,
             getTime(i).minute
@@ -192,7 +216,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
   }
 
   @override
-  void submitTaskEdit(TaskData taskData) {
+  void submitTaskEdit(TaskData taskData) async {
     // Add task data to list
     // We need to remove the previous version of this task from the list, and
     // then have the list reflect this change. However, this only applies if the
@@ -202,25 +226,38 @@ class TaskList implements IListData<TaskData>, ITaskList {
     // the timed head or tail, or the number of tasks in the list
     int prevPos = _seek(taskData);
     if (_list[prevPos].isSet) {
-      _numTasks++;
+      _numTasks--;
       if (prevPos < _timedHead) {
         _timedHead--;
         _timedTail--;
       }
-      else if (prevPos <= _timedTail) {
+      // If this was the last scheduled task (head == tail) then neither head
+      // nor tail should change
+      else if (prevPos <= _timedTail && _timedHead != _timedTail) {
         _timedTail--;
       }
     }
-    // If, however, this is a newly edited task, then we must increment the
-    // number of tasks
-    else {
-      _numTasks++;
-    }
     _list.removeAt(prevPos);
     // Now we can add the task to the list, but not if it is set to repeat on a
-    // day other than today
-    if (taskData.repeatDays[_listDate.weekday]) {
+    // day other than today or scheduled for the future
+    if ((taskData.repeatDays[_listDate.weekday - 1] ||
+        !taskData.repeatDays.contains(true)) &&
+        TaskData.dateToString(taskData.date) ==
+            TaskData.dateToString(_listDate)) {
+      // Increment the number of tasks because we are adding it to the list
+      _numTasks++;
       _addToList(taskData);
+    }
+    else {
+      // In this case, since the task isn't added/re-added to the list, the
+      // task must also be removed from this list widget to avoid having the
+      // widget's builder try to build an incorrect number of items
+      _listWidgetState.removeItem(
+          prevPos,
+              (context, animation) => _removeItemCallback(
+              Task(this, animation, taskData, UniqueKey())
+          )
+      );
     }
     _refreshListWidget.call();
     print("length");
@@ -228,12 +265,19 @@ class TaskList implements IListData<TaskData>, ITaskList {
     print(_numTasks);
 
     // Add task data to database and update indices
-    _saveManager.saveTask(taskData, index: _seek(taskData));
+    int index;
+    try {
+      index = _seek(taskData);
+    }
+    on Exception {
+      index = null;
+    }
+    await _saveManager.saveTask(taskData, index: index);
     _saveManager.updateIndices( // TODO: improve selection
-        TaskData.dateToString(_listDate),
+        TaskData.dateToString(taskData.date),
         _list,
         0,
-        _list.length - 1
+        _numTasks - 1
     );
   }
 
@@ -285,6 +329,16 @@ class TaskList implements IListData<TaskData>, ITaskList {
     _list.removeAt(index);
     if (taskData.isSet) {
       _numTasks--;
+      // Save changes to database and update indices
+      _saveManager.deleteTask(taskData);
+      if (_list.length > 0) {
+        _saveManager.updateIndices(
+            TaskData.dateToString(_listDate),
+            _list,
+            index > 0 ? index - 1 : 0, // Ensures no negative index is passed
+            _numTasks - 1
+        );
+      }
     }
 
     _listWidgetState.removeItem(
@@ -292,15 +346,6 @@ class TaskList implements IListData<TaskData>, ITaskList {
         (context, animation) => _removeItemCallback(
             Task(this, animation, taskData, UniqueKey())
         )
-    );
-
-    // Save changes to database and update indices
-    _saveManager.deleteTask(taskData);
-    _saveManager.updateIndices(
-        TaskData.dateToString(_listDate),
-        _list,
-        index,
-        _list.length - 1
     );
   }
 
@@ -317,6 +362,11 @@ class TaskList implements IListData<TaskData>, ITaskList {
   @override
   void setRefreshCallback(Function function) {
     this._refreshListWidget = function;
+  }
+
+  @override
+  int getNumItems() {
+    return _numTasks;
   }
 
   // Returns a Task object already loaded with the data that was added to the
@@ -336,6 +386,15 @@ class TaskList implements IListData<TaskData>, ITaskList {
 
   Widget getLayout() {
     return _listWidget;
+  }
+
+  void lockTasks() {
+    // TODO: for when the day is done
+  }
+
+  @override
+  Future<void> initialize() {
+    return _init();
   }
 
 }

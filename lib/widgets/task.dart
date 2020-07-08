@@ -16,7 +16,7 @@ class Task extends StatefulWidget {
   TaskState createState() => TaskState(listModel, animation, taskData);
 }
 
-class TaskState extends State<Task> {
+class TaskState extends State<Task> { // TODO: add dropdown menu
 
   ITaskList _listModel;
   Animation<double> _animation;
@@ -61,6 +61,7 @@ class TaskState extends State<Task> {
   void onChecked(bool) {
     setState(() {
       _data.isDone = bool;
+      _listModel.submitTaskEdit(_data);
     });
   }
 
@@ -95,6 +96,10 @@ class TaskState extends State<Task> {
     else {
       return "";
     }
+  }
+
+  void lock() {
+    // TODO: for when the day is done
   }
 
   @override

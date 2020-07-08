@@ -28,7 +28,7 @@ class SaveManager {
             " isScheduled INTEGER, startTimeH INTEGER, startTimeM INTEGER,"
             " endTimeH INTEGER, endTimeM INTEGER, date TEXT)"
         );
-        for (int i = 1; i <= 7; i++) {
+        for (int i = 0; i < 7; i++) {
           // Each table here functions as an array
           // We can use the DatTime day constants to "look up" each table
           await db.execute("CREATE TABLE repeatDay_$i(taskId INTEGER)");
@@ -78,51 +78,76 @@ class SaveManager {
       scheduledTasks = List(0);
     }
     // Convert to TaskData objects
-    List<TaskData> taskList = List();
+    // We must use a fixed length list in order to insert tasks at the correct
+    // index, because insertions at an index exceeding the length of a growable
+    // list are not possible
+    List<TaskData> taskList = List(scheduledTasks.length);
+    int numTasks = 0;
     for (int i = 0; i < scheduledTasks.length; i++) {
+      print("scheduled tasks length ${scheduledTasks.length}");
       // Get the task data associated with this ID
       int id = scheduledTasks[i]["taskId"];
+      int index = scheduledTasks[i]["taskIndex"];
       final List<Map<String, dynamic>> savedTask = await db.query(
           "tasks",
           where: "id = ?",
           whereArgs: [id]
       );
+      print("${savedTask[0]["text"]}");
       if (savedTask.length == 0)
         throw Exception("Task '$id' does not exist in database");
       TaskData taskData = TaskData(
-          id: null,
+          id: id,
           isSet: true,
           isDone: savedTask[0]["isDone"] == 0 ? false : true,
           text: savedTask[0]["text"],
           isScheduled: savedTask[0]["isScheduled"] == 0 ? false : true,
-          startTime: TimeOfDay(
+          startTime: (savedTask[0]["startTimeH"] == null ||
+              savedTask[0]["startTimeM"] == null) ? null :
+            TimeOfDay(
               hour: savedTask[0]["startTimeH"],
               minute: savedTask[0]["startTimeM"]
-          ),
-          endTime: TimeOfDay(
+            ),
+          endTime: (savedTask[0]["endTimeH"] == null ||
+              savedTask[0]["endTimeM"] == null) ? null :
+            TimeOfDay(
               hour: savedTask[0]["endTimeH"],
               minute: savedTask[0]["endTimeM"]
-          ),
-          date: DateTime.parse(date)
+            ),
+          date: DateTime.parse(date.replaceAll(RegExp(r"_"), "-"))
       );
-      for (int i = 1; i <= 7; i++) {
-        final List<Map<String, dynamic>> check = await db.query(
-            "repeatDay_$i",
-            where: "taskId = ?",
-            whereArgs: [taskData.id]
-        );
+      for (int i = 0; i < 7; i++) {
+        List<Map<String, dynamic>> check;
+        try {
+          check = await db.query(
+              "repeatDay_$i",
+              where: "taskId = ?",
+              whereArgs: [taskData.id]
+          );
+        }
+        on DatabaseException {
+          check = List(0);
+        }
         if (check.length == 1) {
           taskData.repeatDays[i] = true;
         }
       }
-      if (savedTask[0]["index"] != null) {
-        taskList.insert(savedTask[0]["index"], taskData);
+      if (index != null) {
+        print("object bruh moment $index");
+        taskList[index] = taskData;
       }
       else {
-        taskList.add(taskData);
+        // Simply add the data on to the end of this list
+        taskList[numTasks] = taskData;
       }
+      numTasks++;
     }
-    return taskList;
+    // Simply convert the fixed-length task list to a growable one
+    List<TaskData> temp = List();
+    for (int i = 0; i < taskList.length; i++) {
+      temp.add(taskList[i]);
+    }
+    return temp;
   }
 
   // Note that these tasks must be sorted after the list is loaded
@@ -152,27 +177,37 @@ class SaveManager {
       if (savedTask.length == 0)
         throw Exception("Task '$id' does not exist in database");
       TaskData taskData = TaskData(
-        id: null,
+        id: id,
         isSet: true,
         isDone: savedTask[0]["isDone"] == 0 ? false : true,
         text: savedTask[0]["text"],
         isScheduled: savedTask[0]["isScheduled"] == 0 ? false : true,
-        startTime: TimeOfDay(
+        startTime: (savedTask[0]["startTimeH"] == null ||
+            savedTask[0]["startTimeM"] == null) ? null :
+          TimeOfDay(
             hour: savedTask[0]["startTimeH"],
             minute: savedTask[0]["startTimeM"]
-        ),
-        endTime: TimeOfDay(
-          hour: savedTask[0]["endTimeH"],
-          minute: savedTask[0]["endTimeM"]
-        ),
-        date: DateTime.parse(date)
+          ),
+        endTime: (savedTask[0]["endTimeH"] == null ||
+            savedTask[0]["endTimeM"] == null) ? null :
+          TimeOfDay(
+            hour: savedTask[0]["endTimeH"],
+            minute: savedTask[0]["endTimeM"]
+          ),
+        date: DateTime.parse(date.replaceAll(RegExp(r"_"), "-"))
       );
-      for (int i = 1; i <= 7; i++) {
-        final List<Map<String, dynamic>> check = await db.query(
-            "repeatDay_$i",
-            where: "taskId = ?",
-            whereArgs: [taskData.id]
-        );
+      for (int i = 0; i < 7; i++) {
+        List<Map<String, dynamic>> check;
+        try {
+          check = await db.query(
+              "repeatDay_$i",
+              where: "taskId = ?",
+              whereArgs: [taskData.id]
+          );
+        }
+        on DatabaseException {
+          check = List(0);
+        }
         if (check.length == 1) {
           taskData.repeatDays[i] = true;
         }
@@ -186,9 +221,8 @@ class SaveManager {
   List<TaskData> _convertData(String date, String tableQuery) {}
 
   // Note that index defaults to null
-  void saveTask(TaskData taskData, {int index}) async {
-    String date = taskData.date != null ? TaskData.dateToString(taskData.date)
-        : null;
+  Future<void> saveTask(TaskData taskData, {int index}) async {
+    String date = TaskData.dateToString(taskData.date);
     // Check if task already exists in the task table and, if so, retain its
     // previously set date. The new data is inserted into the table, replacing
     // any previously saved data under that ID
@@ -199,25 +233,34 @@ class SaveManager {
         whereArgs: [taskData.id]
     );
     String prevDate = prevData.length != 0 ? prevData[0]["date"] : null;
+    // Make sure to delete the old copy, if there is one
+    if (prevData.length != 0) {
+      await db.delete(
+        "tasks",
+        where: "id = ?",
+        whereArgs: [taskData.id]
+      );
+    }
     await db.insert(
       "tasks",
       {
         "id" : taskData.id,
-        "isSet" : true,
-        "isDone" : taskData.isDone,
+        "isSet" : 1,
+        "isDone" : taskData.isDone ? 1 : 0,
         "text" : taskData.text,
-        "isScheduled" : taskData.isScheduled,
-        "startTimeH" : taskData.startTime.hour,
-        "startTimeM" : taskData.startTime.minute,
-        "endTimeH" : taskData.endTime.hour,
-        "endTimeM" : taskData.endTime.minute,
+        "isScheduled" : taskData.isScheduled ? 1 : 0,
+        "startTimeH" : taskData.startTime != null ? taskData.startTime.hour :
+            null,
+        "startTimeM" : taskData.startTime != null ? taskData.startTime.minute :
+            null,
+        "endTimeH" : taskData.endTime != null ? taskData.endTime.hour : null,
+        "endTimeM" : taskData.endTime != null ? taskData.endTime.minute : null,
         "date" : date
       },
-      conflictAlgorithm: ConflictAlgorithm.replace
     );
     // Scan through each day of the week to see if this task has already been
     // set to repeat
-    for (int i = 1; i <= 7; i++) {
+    for (int i = 0; i < 7; i++) {
       // Check if the task being saved is set to repeat on this day
       final List<Map<String, dynamic>> check = await db.query(
           "repeatDay_$i",
@@ -243,10 +286,10 @@ class SaveManager {
       }
       // For all other conditions, just continue on to check the next day
     }
-    // A null date indicates that this is a task only designated for today,
+    // A today date indicates that this is a task only designated for today,
     // while a difference between the previously set date and the new date
     // indicates that a change has occurred and the saved data must be updated
-    if (date == null || prevDate != date) {
+    if (date == TaskData.dateToString(DateTime.now()) || prevDate != date) {
       if (prevDate != null) {
         // If a date change occurs and the previous date was set, then the data
         // must be removed from the previous date's table
@@ -256,18 +299,10 @@ class SaveManager {
           whereArgs: [taskData.id]
         );
       }
-      String dateKey;
-      if (date == null) {
-        // If the task has an unset date, then save to today's task table
-        dateKey = TaskData.dateToString(DateTime.now());
-      }
-      else {
-        dateKey = date;
-      }
       List<Map<String, dynamic>> scheduledTasks;
       try {
         scheduledTasks = await db.query(
-            "scheduledTasks_$dateKey"
+            "scheduledTasks_$date"
         );
       }
       on DatabaseException {
@@ -275,21 +310,35 @@ class SaveManager {
       }
       // If the new date's (or today's date's) table doesn't exist, create it
       if (scheduledTasks.length == 0) {
-        await db.execute(
-            "CREATE TABLE scheduledTasks_$dateKey("
-                "taskId INTEGER PRIMARY KEY, index INTEGER)"
-        );
+        try {
+          await db.execute(
+              "CREATE TABLE scheduledTasks_$date("
+                  "taskId INTEGER PRIMARY KEY, taskIndex INTEGER)"
+          );
+        } catch (e) {}
       }
       // Add to the new date's table. In the case of the task being assigned
       // today's date, its previous data in that table may need to be replaced
       // if it was set
+      final List<Map<String, dynamic>> prevScheduledData = await db.query(
+          "scheduledTasks_$date",
+          where: "taskId = ?",
+          whereArgs: [taskData.id]
+      );
+      // Make sure to delete the old copy, if there is one
+      if (prevScheduledData.length != 0) {
+        await db.delete(
+            "scheduledTasks_$date",
+            where: "taskId = ?",
+            whereArgs: [taskData.id]
+        );
+      }
       await db.insert(
-          "scheduledTasks_$dateKey",
+          "scheduledTasks_$date",
           {
             "taskId" : taskData.id,
-            "index" : index
+            "taskIndex" : index
           },
-          conflictAlgorithm: ConflictAlgorithm.replace
       );
     }
   }
@@ -305,15 +354,8 @@ class SaveManager {
       );
     }
     // Remove task from appropriate scheduledTasks table
-    String date;
-    if (taskData.date != null) {
-      date = TaskData.dateToString(taskData.date);
-    }
-    else {
-      date = TaskData.dateToString(DateTime.now());
-    }
     await db.delete(
-        "scheduledTasks_$date",
+        "scheduledTasks_${TaskData.dateToString(taskData.date)}",
         where: "taskId = ?",
         whereArgs: [taskData.id]
     );
@@ -323,21 +365,34 @@ class SaveManager {
   void updateIndices(String date, List<TaskData> taskData, int head,
       int tail) async {
     final Database db = await _database;
-    final Batch batch = db.batch();
     for (int i = 0; i <= tail - head; i++) {
       int index = head + i;
-      // We use insert so that this method can be used on a task list loaded for
-      // the first time, whose sorting and indices have not been set
-      batch.insert(
+      // We can use update because this method should only ever be called on a
+      // list that has either been loaded from saved storage or following a
+      // change made to a task that has been saved. In both cases, the task
+      // being updated will already exist in the scheduled tasks table for that
+      // date
+      final List<Map<String, dynamic>> prevScheduledData = await db.query(
+          "scheduledTasks_$date",
+          where: "taskId = ?",
+          whereArgs: [taskData[i].id]
+      );
+      // Make sure to delete the old copy, if there is one
+      if (prevScheduledData.length != 0) {
+        await db.delete(
+            "scheduledTasks_$date",
+            where: "taskId = ?",
+            whereArgs: [taskData[i].id]
+        );
+      }
+      await db.insert(
         "scheduledTasks_$date",
         {
           "taskId" : taskData[i].id,
-          "index" : index
+          "taskIndex" : index
         },
-        conflictAlgorithm: ConflictAlgorithm.replace
       );
     }
-    batch.commit();
   }
 
 }

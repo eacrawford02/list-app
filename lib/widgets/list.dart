@@ -5,14 +5,13 @@ class ListWidget extends StatefulWidget {
 
   final IListData _listModel;
   final GlobalKey<AnimatedListState> _key;
-  final Future<void> _initialized;
   final int _initialItems;
 
-  ListWidget(this._listModel, this._key, this._initialized, this._initialItems);
+  ListWidget(this._listModel, this._key, this._initialItems);
 
   @override
   ListWidgetState createState() =>
-      ListWidgetState(_listModel,_initialized , _initialItems);
+      ListWidgetState(_listModel, _initialItems);
 }
 
 class ListWidgetState extends State<ListWidget> {
@@ -22,17 +21,18 @@ class ListWidgetState extends State<ListWidget> {
   // be created in the state class otherwise trying to access it via the
   // currentState property will return null
   final GlobalKey<AnimatedListState> _key = GlobalKey<AnimatedListState>();
-  final Future<void> _initialized;
+   Future<void> _initialized;
   final int _initialItems;
 
-  ListWidgetState(this._listModel, this._initialized, this._initialItems) {
-    throw Exception("bruh");
+  ListWidgetState(this._listModel, this._initialItems) {
     _listModel.setKey(_key);
     _listModel.setItemRemover(_removeItem);
     _listModel.setRefreshCallback(_refresh);
+    this._initialized = _listModel.initialize();
   }
 
   Widget _buildItem(BuildContext context, int index, Animation<double> animation) {
+    print("in list ${_listModel.getNumItems()}");
     return _listModel.getItemWidget(index, animation);
   }
 
@@ -47,14 +47,17 @@ class ListWidgetState extends State<ListWidget> {
     return FutureBuilder(
       future: _initialized,
       builder: (BuildContext context, AsyncSnapshot snapshot) {
+        // If the list model has been initialized
         if (snapshot.connectionState == ConnectionState.done) {
+          print("num items ${_listModel.getNumItems()}");
           return AnimatedList(
             key: _key,
-            initialItemCount: _initialItems,
+            initialItemCount: _listModel.getNumItems(),
             itemBuilder: _buildItem,
           );
         }
         else {
+          print("bruh items ${_listModel.getNumItems()}");
           return Container(
             alignment: Alignment.center,
             child: SizedBox(
@@ -76,6 +79,10 @@ abstract class IListData<T> { // Where T is the type of data, ie. TaskData
   void setItemRemover(Function function);
 
   void setRefreshCallback(Function function);
+
+  Future<void> initialize();
+
+  int getNumItems();
 
   Widget getItemWidget(int index, Animation<double> animation);
 }
