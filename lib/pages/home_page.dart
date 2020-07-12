@@ -6,18 +6,26 @@ import 'package:listapp/widgets/bottom_action_bar.dart';
 import 'package:listapp/widgets/task.dart';
 
 class HomePage extends StatefulWidget {
+
+  final String notificationTaskId;
+
+  HomePage({this.notificationTaskId});
+
   @override
-  _HomePageState createState() => _HomePageState();
+  _HomePageState createState() => _HomePageState(notificationTaskId);
 }
 
 class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin{
 
+  final String _notificationTaskId;
   final String title = "List";
   List<IconButton> _buttons;
   ActionWidgetCollection _actionBar;
   TabCollection _tabCollection;
   TaskList _currentTasks;
+
+  _HomePageState(this._notificationTaskId);
 
   @override
   void initState() {
@@ -28,7 +36,10 @@ class _HomePageState extends State<HomePage>
     ];
 
     // TODO: replace/fix all this stuff
-    _currentTasks = TaskList();
+    _currentTasks = TaskList(
+        initialTaskId: _notificationTaskId != null ?
+            int.parse(_notificationTaskId) : null
+    );
     _tabCollection = TabCollection(this);
     _tabCollection.addTab(
         title: "Today's Tasks",

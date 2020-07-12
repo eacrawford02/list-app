@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:listapp/utils/notification_scheduler.dart';
 import 'package:listapp/widgets/task_edit_dialog.dart';
 import 'package:listapp/models/task_data.dart';
 
@@ -23,6 +27,8 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
   TaskData _data;
   bool _isActive = false;
   bool _isExpired = false;
+  Timer _updateStatusStartTimer;
+  Timer _updateStatusEndTimer;
 
   TaskState(this._listModel, this._animation, this._data) {
     _updateStatus();
@@ -58,7 +64,99 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
     }
   }
 
-  void onChecked(bool) {
+  void _setNotifications(TaskData newData) {
+    // Schedule start time notifications and timers
+    DateTime currentTime = DateTime.now();
+    if (_data.startTime != newData.startTime) { // Change in start time
+      // If the start time has been set for today
+      if (newData.startTime != null &&
+          TaskData.dateToString(newData.date) ==
+              TaskData.dateToString(currentTime)) {
+        // Schedule local notification
+        DateTime newStartTime = DateTime(
+            currentTime.year,
+            currentTime.month,
+            currentTime.day,
+            newData.startTime.hour,
+            newData.startTime.minute
+        );
+        if (newStartTime.isAfter(currentTime)) {
+          NotificationScheduler.scheduleNotification(
+              newData.id,
+              "To-Do:",
+              newData.text,
+              newStartTime
+          );
+          // Schedule start timer
+          Duration countdown = currentTime.difference(newStartTime);
+          _updateStatusStartTimer = Timer(
+              countdown,
+              () {
+                if (this.mounted) {
+                  setState(() {
+                    _updateStatus();
+                  });
+                }
+              }
+          );
+        }
+      }
+      else {
+        // Cancel local notification
+        DateTime prevStartTime = DateTime(
+            currentTime.year,
+            currentTime.month,
+            currentTime.day,
+            _data.startTime.hour,
+            _data.startTime.minute
+        );
+        if (prevStartTime.isAfter(currentTime)) {
+          NotificationScheduler.cancelNotification(newData.id);
+          // Cancel start timer
+          _updateStatusStartTimer.cancel();
+        }
+      }
+    }
+    // Schedule end time timers
+    if (_data.endTime != newData.endTime) { // Change in end time
+      // If the end time has been set for today
+      if (newData.endTime != null &&
+          TaskData.dateToString(newData.date) ==
+              TaskData.dateToString(currentTime)) {
+        // Schedule end timer
+        DateTime newEndTime = DateTime(
+            currentTime.year,
+            currentTime.month,
+            currentTime.day,
+            _data.endTime.hour,
+            _data.endTime.minute
+        );
+        if (newEndTime.isAfter(currentTime)) {
+          // Add a minute to properly trigger expiry as the then current time
+          // must be greater than the task's end time
+          Duration countdown = currentTime.difference(
+              newEndTime.add(Duration(minutes: 1))
+          );
+          _updateStatusEndTimer = Timer(
+              countdown,
+              () {
+                if (this.mounted) {
+                  setState(() {
+                    _updateStatus();
+                  });
+                }
+              }
+          );
+        }
+      }
+      else {
+        // Cancel end timer
+        _updateStatusEndTimer.cancel();
+      }
+    }
+  }
+
+  void _onChecked(bool) {
     setState(() {
       _data.isDone = bool;
       _listModel.submitTaskEdit(_data);
@@ -71,6 +169,8 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
       builder: (BuildContext context) => TaskEditDialog(_data)
     );
     if (newData.isSet) {
+      _setNotifications(newData);
+
       setState(() {
         _data = newData;
         _updateStatus();
@@ -114,6 +214,9 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
         axis: Axis.vertical,
         sizeFactor: _animation,
         child: Card(
+          shape: Border(
+            bottom: _isActive ? BorderSide(color: Colors.blue) : BorderSide.none
+          ),
           child: Padding(
             padding: const EdgeInsets.only(
               left: 8,
@@ -129,7 +232,7 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
                   ),
                   child: Checkbox(
                       value: _data.isDone,
-                      onChanged: _data.isSet && !_isExpired ? onChecked : null,
+                      onChanged: _data.isSet && !_isExpired ? _onChecked : null,
                   ),
                 ),
                 Expanded(

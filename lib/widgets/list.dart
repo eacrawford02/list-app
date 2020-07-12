@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:listapp/widgets/task.dart';
+import 'package:scroll_to_index/scroll_to_index.dart';
 
 class ListWidget extends StatefulWidget {
 
   final IListData _listModel;
-  final GlobalKey<AnimatedListState> _key;
-  final int _initialItems;
+  final Future<void> _initialized;
 
-  ListWidget(this._listModel, this._key, this._initialItems);
+  ListWidget(this._listModel, this._initialized, Key key)
+      : super(key : key);
 
   @override
   ListWidgetState createState() =>
-      ListWidgetState(_listModel, _initialItems);
+      ListWidgetState(_listModel, _initialized);
 }
 
 class ListWidgetState extends State<ListWidget> {
@@ -22,24 +22,51 @@ class ListWidgetState extends State<ListWidget> {
   // currentState property will return null
   final GlobalKey<AnimatedListState> _key = GlobalKey<AnimatedListState>();
    Future<void> _initialized;
-  final int _initialItems;
+   AutoScrollController _scrollController;
+   bool _shouldScroll = false;
+   int _scrollIndex = 0;
 
-  ListWidgetState(this._listModel, this._initialItems) {
+  ListWidgetState(this._listModel, this._initialized) {
     _listModel.setKey(_key);
     _listModel.setItemRemover(_removeItem);
     _listModel.setRefreshCallback(_refresh);
-    this._initialized = _listModel.initialize();
+    _listModel.setScrollTo(_scrollTo);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _scrollController = AutoScrollController(
+      axis: Axis.vertical
+    );
   }
 
   Widget _buildItem(BuildContext context, int index, Animation<double> animation) {
-    print("in list ${_listModel.getNumItems()}");
-    return _listModel.getItemWidget(index, animation);
+    Widget item = _listModel.getItemWidget(index, animation);
+    Widget scrollItem =  AutoScrollTag(
+      key: item.key,
+      controller: _scrollController,
+      index: index,
+      child: item
+    );
+    // print("$index = ${_listModel.getListLength() - 1}");
+    if (_shouldScroll) {
+      _scrollController.scrollToIndex(_scrollIndex);
+      _shouldScroll = false;
+    }
+    return scrollItem;
   }
 
   Widget _removeItem(Widget widget) => widget;
 
   void _refresh() {
     setState(() {});
+  }
+
+  void _scrollTo(int index) {
+    _scrollIndex = index;
+    _shouldScroll = true;
   }
 
   @override
@@ -52,8 +79,9 @@ class ListWidgetState extends State<ListWidget> {
           print("num items ${_listModel.getNumItems()}");
           return AnimatedList(
             key: _key,
-            initialItemCount: _listModel.getNumItems(),
+            initialItemCount: _listModel.getListLength(),
             itemBuilder: _buildItem,
+            controller: _scrollController,
           );
         }
         else {
@@ -80,9 +108,11 @@ abstract class IListData<T> { // Where T is the type of data, ie. TaskData
 
   void setRefreshCallback(Function function);
 
-  Future<void> initialize();
+  void setScrollTo(Function function);
 
   int getNumItems();
+
+  int getListLength();
 
   Widget getItemWidget(int index, Animation<double> animation);
 }

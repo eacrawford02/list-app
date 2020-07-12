@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:listapp/widgets/list.dart';
@@ -11,7 +12,11 @@ typedef _GetTimeFunction = TimeOfDay Function(int index);
 class TaskList implements IListData<TaskData>, ITaskList {
 
   SaveManager _saveManager;
+  Future<void> _initialized;
   List<TaskData> _list;
+  // By subtracting one from the length, we can use a spacer widget as the last
+  // element of the list
+  int get _listLength => _list.length - 1;
   DateTime _listDate;
   int _timedHead; // Inclusive
   int _timedTail; // Inclusive
@@ -28,8 +33,9 @@ class TaskList implements IListData<TaskData>, ITaskList {
   AnimatedListState get _listWidgetState => _key.currentState;
   dynamic _removeItemCallback;
   Function _refreshListWidget;
+  Function _scrollTo;
 
-  TaskList() {
+  TaskList({int initialTaskId}) {
     _list = List();
     _listDate = DateTime.now();
     _timedHead = 0;
@@ -37,16 +43,26 @@ class TaskList implements IListData<TaskData>, ITaskList {
     _numTasks = 0;
     _numCompletedTasks = 0;
 
-    _listWidget = ListWidget(this, _key, _numTasks);
+    _initialized = _init(initialTaskId);
+    _listWidget = ListWidget(this, _initialized, _key);
     // TODO: clean up print statements
   }
 
-  Future<void> _init() async {
+  Future<void> _init(int initialTaskId) async {
     _saveManager = await SaveManager.getManager();
     await _loadData().then((value) {
       // The callback might be null if the list widget has not already been
       // built. Calling this (if the list widget has already been built) allows
       // us to rebuild it with the correct number of initial tasks
+      int initialIndex = 0;
+      if (initialTaskId != null) {
+        for (int i = 0; i < _listLength; i++) {
+          if (_list[i].id == initialTaskId) {
+            initialIndex = i;
+          }
+        }
+      }
+      _scrollTo(initialIndex);
       _refreshListWidget?.call();
     });
     // Now that the list model has completed initialization, refresh the list
@@ -54,6 +70,8 @@ class TaskList implements IListData<TaskData>, ITaskList {
   }
 
   Future<void> _loadData() async {
+    // TODO: fix issue where a repeating task that is deleted gets reloaded
+    // TODO: add public reload method
     // Load task data from database
     String date = TaskData.dateToString(_listDate);
     List<TaskData> scheduledTasks = await _saveManager.loadScheduledTasks(date);
@@ -137,12 +155,14 @@ class TaskList implements IListData<TaskData>, ITaskList {
       }
     }
     print("list length is ${_list.length}");
+    // Add the spacer widget to the end of the list
+    _list.add(null);
     // Update saved indices for each task in the newly constructed list
-    _saveManager.updateIndices(date, _list, 0, _list.length - 1);
+    _saveManager.updateIndices(date, _list, 0, _listLength - 1);
   }
 
   int _seek(TaskData data) {
-    for (int i = 0; i < _list.length; i++) {
+    for (int i = 0; i < _listLength; i++) {
       if (_list[i].id == data.id) {
         return i;
       }
@@ -168,7 +188,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
       }
     }
     else {
-      if (prevPos != null && prevPos != _list.length) {
+      if (prevPos != null && prevPos != _listLength) {
         _list.insert(prevPos, data);
       }
       else {
@@ -211,8 +231,13 @@ class TaskList implements IListData<TaskData>, ITaskList {
   }
 
   void addNewTask({TaskData taskData}) {
-    _list.add(taskData ?? TaskData(id: DateTime.now().millisecondsSinceEpoch));
-    _listWidgetState.insertItem(_list.length - 1);
+    _list.insert(
+        _list.length - 1,
+        taskData ?? TaskData(id: DateTime.now().millisecondsSinceEpoch)
+    );
+    _scrollTo(_listLength);
+    _listWidgetState.insertItem(_listLength - 1);
+    print("length of the list when added is ${_list.length}");
   }
 
   @override
@@ -225,7 +250,8 @@ class TaskList implements IListData<TaskData>, ITaskList {
     // outside the range of the list where its removal would have any impact on
     // the timed head or tail, or the number of tasks in the list
     int prevPos = _seek(taskData);
-    if (_list[prevPos].isSet) {
+    bool prevSet = _list[prevPos].isSet;
+    if (prevSet) {
       _numTasks--;
       if (prevPos < _timedHead) {
         _timedHead--;
@@ -261,7 +287,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
     }
     _refreshListWidget.call();
     print("length");
-    print(_list.length);
+    print(_listLength);
     print(_numTasks);
 
     // Add task data to database and update indices
@@ -273,6 +299,18 @@ class TaskList implements IListData<TaskData>, ITaskList {
       index = null;
     }
     await _saveManager.saveTask(taskData, index: index);
+    // If the task ends up being removed from today's list, then in addition to
+    // updating the indices of the list that the task is being sent to, we must
+    // also update the indices of today's list to account for its removal
+    if (prevSet && TaskData.dateToString(taskData.date) !=
+        TaskData.dateToString(_listDate)) {
+      _saveManager.updateIndices(
+          TaskData.dateToString(_listDate),
+          _list,
+          0,
+          _numTasks - 1
+      );
+    }
     _saveManager.updateIndices( // TODO: improve selection
         TaskData.dateToString(taskData.date),
         _list,
@@ -291,12 +329,17 @@ class TaskList implements IListData<TaskData>, ITaskList {
       _timedHead++;
       _timedTail++;
     }
-    // TODO: fix
     _list.removeAt(pos);
     _list.insert(0, data);
     _listWidgetState.insertItem(0);
 
-    // TODO: Save changes to database
+    // Save changes to database
+    _saveManager.updateIndices(
+        TaskData.dateToString(_listDate),
+        _list,
+        0,
+        _numTasks - 1
+    );
   }
 
   @override
@@ -309,7 +352,6 @@ class TaskList implements IListData<TaskData>, ITaskList {
       _timedHead--;
       _timedTail--;
     }
-    // TODO: fix
     _list.removeAt(pos);
     _listWidgetState.removeItem(
         pos,
@@ -318,20 +360,33 @@ class TaskList implements IListData<TaskData>, ITaskList {
         )
     );
     _list.insert(_numTasks - 1, data);
-    _listWidgetState.insertItem(0);
+    _listWidgetState.insertItem(_numTasks - 1);
 
-    // TODO: Save changes to database
+    // Save changes to database
+    _saveManager.updateIndices(
+        TaskData.dateToString(_listDate),
+        _list,
+        0,
+        _numTasks - 1
+    );
   }
 
   @override
   void removeTask(TaskData taskData) {
     int index = _seek(taskData);
+    if (index < _timedHead) {
+      _timedHead--;
+      _timedTail--;
+    }
+    else if (index <= _timedTail && _timedHead != _timedTail) {
+      _timedTail--;
+    }
     _list.removeAt(index);
     if (taskData.isSet) {
       _numTasks--;
       // Save changes to database and update indices
       _saveManager.deleteTask(taskData);
-      if (_list.length > 0) {
+      if (_listLength > 0) {
         _saveManager.updateIndices(
             TaskData.dateToString(_listDate),
             _list,
@@ -365,15 +420,34 @@ class TaskList implements IListData<TaskData>, ITaskList {
   }
 
   @override
+  void setScrollTo(Function function) {
+    this._scrollTo = function;
+  }
+
+  @override
   int getNumItems() {
     return _numTasks;
+  }
+
+  @override
+  int getListLength() {
+    return _list.length;
   }
 
   // Returns a Task object already loaded with the data that was added to the
   // list
   @override
   Widget getItemWidget(int index, Animation<double> animation) {
-    return Task(this, animation, _list[index], UniqueKey());
+    if (_list[index] != null) {
+      return Task(this, animation, _list[index], UniqueKey());
+    }
+    else {
+      return SizedBox(height: 72, width: 30);
+    }
+  }
+
+  Future<void> getInitFuture() {
+    return _initialized;
   }
 
   int getNumTasks() {
@@ -388,13 +462,12 @@ class TaskList implements IListData<TaskData>, ITaskList {
     return _listWidget;
   }
 
-  void lockTasks() {
-    // TODO: for when the day is done
+  void scrollTo(int index) {
+    _scrollTo(index);
   }
 
-  @override
-  Future<void> initialize() {
-    return _init();
+  void lockTasks() {
+    // TODO: for when the day is done
   }
 
 }
