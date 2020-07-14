@@ -38,13 +38,14 @@ class ListWidgetState extends State<ListWidget> {
     super.initState();
 
     _scrollController = AutoScrollController(
-      axis: Axis.vertical
+      axis: Axis.vertical,
+      viewportBoundaryGetter: () => Rect.fromLTRB(0, 0, 0, 56)
     );
   }
 
   Widget _buildItem(BuildContext context, int index, Animation<double> animation) {
     Widget item = _listModel.getItemWidget(index, animation);
-    Widget scrollItem =  AutoScrollTag(
+    Widget scrollItem = AutoScrollTag(
       key: item.key,
       controller: _scrollController,
       index: index,

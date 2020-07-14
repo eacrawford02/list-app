@@ -20,17 +20,21 @@ class Task extends StatefulWidget {
   TaskState createState() => TaskState(listModel, animation, taskData);
 }
 
-class TaskState extends State<Task> { // TODO: add dropdown menu
+enum MenuOptions {EDIT, TO_TOP, TO_BOTTOM}
+
+class TaskState extends State<Task> { // TODO: implement theme data
 
   ITaskList _listModel;
   Animation<double> _animation;
   TaskData _data;
   bool _isActive = false;
   bool _isExpired = false;
+  bool _isLocked;
   Timer _updateStatusStartTimer;
   Timer _updateStatusEndTimer;
 
   TaskState(this._listModel, this._animation, this._data) {
+    _isLocked = _listModel.isLocked();
     _updateStatus();
   }
 
@@ -72,6 +76,12 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
       if (newData.startTime != null &&
           TaskData.dateToString(newData.date) ==
               TaskData.dateToString(currentTime)) {
+        // Cancel previous local notification and start timer
+        if (_data.startTime != null && TaskData.dateToString(_data.date) ==
+            TaskData.dateToString(currentTime)) {
+          NotificationScheduler.cancelNotification(_data.id);
+          _updateStatusStartTimer.cancel();
+        }
         // Schedule local notification
         DateTime newStartTime = DateTime(
             currentTime.year,
@@ -101,7 +111,8 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
           );
         }
       }
-      else {
+      else if (TaskData.dateToString(_data.date) ==
+          TaskData.dateToString(currentTime)) {
         // Cancel local notification
         DateTime prevStartTime = DateTime(
             currentTime.year,
@@ -123,6 +134,11 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
       if (newData.endTime != null &&
           TaskData.dateToString(newData.date) ==
               TaskData.dateToString(currentTime)) {
+        // Cancel previous end timer
+        if (_data.endTime != null && TaskData.dateToString(_data.date) ==
+            TaskData.dateToString(currentTime)) {
+          _updateStatusEndTimer.cancel();
+        }
         // Schedule end timer
         DateTime newEndTime = DateTime(
             currentTime.year,
@@ -149,7 +165,8 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
           );
         }
       }
-      else {
+      else if (TaskData.dateToString(_data.date) ==
+          TaskData.dateToString(currentTime)) {
         // Cancel end timer
         _updateStatusEndTimer.cancel();
       }
@@ -196,10 +213,6 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
     else {
       return "";
     }
-  }
-
-  void lock() {
-    // TODO: for when the day is done
   }
 
   @override
@@ -258,9 +271,45 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
                     ],
                   ),
                 ),
-                IconButton(
-                    icon: Icon(_data.isSet ? Icons.more_vert : Icons.edit),
-                    onPressed: () => showEditDialog(context)
+                Container(
+                  child: _data.isSet ?
+                    PopupMenuButton<MenuOptions>(
+                      icon: Icon(Icons.more_vert),
+                      onSelected: (MenuOptions result) {
+                        switch (result) {
+                          case MenuOptions.EDIT:
+                            showEditDialog(context);
+                            break;
+                          case MenuOptions.TO_TOP:
+                            _listModel.moveToTop(_data);
+                            break;
+                          case MenuOptions.TO_BOTTOM:
+                            _listModel.moveToBottom(_data);
+                            break;
+                        }
+                      },
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<MenuOptions>> [
+                            const PopupMenuItem<MenuOptions>(
+                              value: MenuOptions.EDIT,
+                              child: Text("Edit Task"),
+                            ),
+                            !_data.isScheduled ?
+                            const PopupMenuItem<MenuOptions>(
+                              value: MenuOptions.TO_TOP,
+                              child: Text("Move To Top"),
+                            ) : null,
+                            !_data.isScheduled ?
+                            const PopupMenuItem<MenuOptions>(
+                              value: MenuOptions.TO_BOTTOM,
+                              child: Text("Move To Bottom"),
+                            ) : null,
+                          ]
+                    ) :
+                    IconButton(
+                        icon: Icon(Icons.edit),
+                        onPressed: () => showEditDialog(context)
+                    ),
                 ),
                 IconButton(
                     icon: Icon(Icons.delete),
@@ -268,6 +317,7 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
                     splashColor: Color.fromRGBO(255, 0, 0, 0.5),
                     onPressed: () {
                       _listModel.removeTask(_data);
+                      NotificationScheduler.cancelNotification(_data.id);
                     }
                 ),
               ],
@@ -280,6 +330,8 @@ class TaskState extends State<Task> { // TODO: add dropdown menu
 }
 
 abstract class ITaskList {
+  bool isLocked();
+
   void submitTaskEdit(TaskData data);
 
   void moveToTop(TaskData data);

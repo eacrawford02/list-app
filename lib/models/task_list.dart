@@ -23,6 +23,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
   int _numTasks;
   int _numCompletedTasks;
   // TODO: _wastedTime;
+  bool _isLocked;
   Widget _listWidget;
   GlobalKey<AnimatedListState> _key;
   // Why is this a getter method? Because if we were to set _listWidgetState to
@@ -36,20 +37,21 @@ class TaskList implements IListData<TaskData>, ITaskList {
   Function _scrollTo;
 
   TaskList({int initialTaskId}) {
-    _list = List();
-    _listDate = DateTime.now();
-    _timedHead = 0;
-    _timedTail = 0;
-    _numTasks = 0;
-    _numCompletedTasks = 0;
-
     _initialized = _init(initialTaskId);
     _listWidget = ListWidget(this, _initialized, _key);
     // TODO: clean up print statements
   }
 
   Future<void> _init(int initialTaskId) async {
+    _list = List();
+    _listDate = DateTime.now();
+    _timedHead = 0;
+    _timedTail = 0;
+    _numTasks = 0;
+    _numCompletedTasks = 0;
     _saveManager = await SaveManager.getManager();
+    Map<String, dynamic> listData = await _saveManager.loadListData(_listDate);
+    listData != null ? _isLocked = listData["isLocked"] : _isLocked = false;
     await _loadData().then((value) {
       // The callback might be null if the list widget has not already been
       // built. Calling this (if the list widget has already been built) allows
@@ -70,8 +72,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
   }
 
   Future<void> _loadData() async {
-    // TODO: fix issue where a repeating task that is deleted gets reloaded
-    // TODO: add public reload method
+    // TODO: fix issue where a repeating task that is deleted gets reloaded -> repeatLoadFlag in saved task data
     // Load task data from database
     String date = TaskData.dateToString(_listDate);
     List<TaskData> scheduledTasks = await _saveManager.loadScheduledTasks(date);
@@ -241,6 +242,11 @@ class TaskList implements IListData<TaskData>, ITaskList {
   }
 
   @override
+  bool isLocked() {
+    return _isLocked;
+  }
+
+  @override
   void submitTaskEdit(TaskData taskData) async {
     // Add task data to list
     // We need to remove the previous version of this task from the list, and
@@ -322,7 +328,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
   @override
   void moveToTop(TaskData data) {
     int pos = _seek(data);
-    if (pos >= _timedHead && pos < _timedTail) {
+    if (pos >= _timedHead && pos <= _timedTail) {
       throw Exception("Can't move scheduled task to the top");
     }
     else if (pos >= _timedTail) {
@@ -330,6 +336,12 @@ class TaskList implements IListData<TaskData>, ITaskList {
       _timedTail++;
     }
     _list.removeAt(pos);
+    _listWidgetState.removeItem(
+        pos,
+            (context, animation) => _removeItemCallback(
+            Task(this, animation, data, UniqueKey())
+        )
+    );
     _list.insert(0, data);
     _listWidgetState.insertItem(0);
 
@@ -345,7 +357,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
   @override
   void moveToBottom(TaskData data) {
     int pos = _seek(data);
-    if (pos >= _timedHead && pos < _timedTail) {
+    if (pos >= _timedHead && pos <= _timedTail) {
       throw Exception("Can't move scheduled task to the bottom");
     }
     else if (pos < _timedHead) {
@@ -462,12 +474,17 @@ class TaskList implements IListData<TaskData>, ITaskList {
     return _listWidget;
   }
 
+  Future<void> reload() {
+    return _init(null);
+  }
+
   void scrollTo(int index) {
     _scrollTo(index);
   }
 
   void lockTasks() {
-    // TODO: for when the day is done
+    _isLocked = true;
+    _refreshListWidget();
   }
 
 }

@@ -20,8 +20,7 @@ class SaveManager {
       // the list's data
       onCreate: (db, version) async {
         await db.execute("CREATE TABLE taskListData(date TEXT PRIMARY KEY,"
-            " timedHead INTEGER, timedTail INTEGER, numTasks INTEGER,"
-            " numCompletedTasks INTEGER)"
+            " isLocked INTEGER)"
         );
         await db.execute("CREATE TABLE tasks(id INTEGER PRIMARY KEY,"
             " isSet INTEGER, isDone INTEGER, text TEXT,"
@@ -48,15 +47,20 @@ class SaveManager {
     }
   }
 
-  Future<Map<String, dynamic>> loadListData(String date) async {
+  Future<Map<String, dynamic>> loadListData(DateTime listDate) async {
     // Get a reference to the database
     final Database db = await _database;
-
     // Query the table for the list data
-    final List<Map<String, dynamic>> maps = await db.query("taskListData");
+    List<Map<String, dynamic>> maps;
+    try {
+      maps = await db.query("taskListData");
+    }
+    on DatabaseException {
+      maps = List();
+    }
     // Find the correct list data
     for (int i = 0; i < maps.length; i++) {
-      if (maps[i]["date"] == date) {
+      if (maps[i]["date"] == TaskData.dateToString(listDate)) {
         return maps[i];
       }
     }
@@ -219,6 +223,27 @@ class SaveManager {
 
   // TODO: this
   List<TaskData> _convertData(String date, String tableQuery) {}
+
+  Future<void> saveListData(DateTime listDate, bool locked) async {
+    String date = TaskData.dateToString(listDate);
+    final Database db = await _database;
+    final List<Map<String, dynamic>> prevData = await db.query(
+        "taskListData",
+        where: "date = ?",
+        whereArgs: [date]
+    );
+    if (prevData.length != 0) {
+      await db.delete(
+        "taskListData",
+        where: "date = ?",
+        whereArgs: [date]
+      );
+    }
+    await db.insert(
+      "taskListData",
+      {"isLocked" : locked ? 1 : 0}
+    );
+  }
 
   // Note that index defaults to null
   Future<void> saveTask(TaskData taskData, {int index}) async {
