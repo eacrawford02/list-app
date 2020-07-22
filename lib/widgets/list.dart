@@ -5,13 +5,13 @@ class ListWidget extends StatefulWidget {
 
   final IListData _listModel;
   final Future<void> _initialized;
+  final Function _onCreate;
 
-  ListWidget(this._listModel, this._initialized, Key key)
-      : super(key : key);
+  ListWidget(this._listModel, this._initialized, Key key, this._onCreate) : super(key: key);
 
   @override
   ListWidgetState createState() =>
-      ListWidgetState(_listModel, _initialized);
+      ListWidgetState(_listModel, _initialized, _onCreate);
 }
 
 class ListWidgetState extends State<ListWidget> {
@@ -21,16 +21,19 @@ class ListWidgetState extends State<ListWidget> {
   // be created in the state class otherwise trying to access it via the
   // currentState property will return null
   final GlobalKey<AnimatedListState> _key = GlobalKey<AnimatedListState>();
-   Future<void> _initialized;
-   AutoScrollController _scrollController;
-   bool _shouldScroll = false;
-   int _scrollIndex = 0;
+  final Function _onCreate;
+  Future<void> _initialized;
+  AutoScrollController _scrollController;
+  bool _shouldScroll = false;
+  int _scrollIndex = 0;
 
-  ListWidgetState(this._listModel, this._initialized) {
+  ListWidgetState(this._listModel, this._initialized, this._onCreate) {
     _listModel.setKey(_key);
     _listModel.setItemRemover(_removeItem);
     _listModel.setRefreshCallback(_refresh);
     _listModel.setScrollTo(_scrollTo);
+
+    _onCreate();
   }
 
   @override
@@ -39,7 +42,7 @@ class ListWidgetState extends State<ListWidget> {
 
     _scrollController = AutoScrollController(
       axis: Axis.vertical,
-      viewportBoundaryGetter: () => Rect.fromLTRB(0, 0, 0, 56)
+      viewportBoundaryGetter: () => Rect.fromLTRB(0, 0, 0, 66)
     );
   }
 
@@ -61,8 +64,12 @@ class ListWidgetState extends State<ListWidget> {
 
   Widget _removeItem(Widget widget) => widget;
 
-  void _refresh() {
-    setState(() {});
+  void _refresh({Future<void> reinitializeFuture}) {
+    setState(() {
+      if (reinitializeFuture != null) {
+        _initialized = reinitializeFuture;
+      }
+    });
   }
 
   void _scrollTo(int index) {

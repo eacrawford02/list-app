@@ -36,16 +36,29 @@ class TaskState extends State<Task> { // TODO: implement theme data
   TaskState(this._listModel, this._animation, this._data) {
     _isLocked = _listModel.isLocked();
     _updateStatus();
+    _setNotifications(_data);
   }
 
   void _updateStatus() {
     if (_data.isScheduled) {
       TimeOfDay timeRef = TimeOfDay.now();
       int currentTime = TaskData.createTimeStamp(timeRef.hour, timeRef.minute);
+      int startTime = _data.startTime != null ? TaskData.createTimeStamp(
+          _data.startTime.hour, _data.startTime.minute) : null;
+      int endTime = _data.endTime != null ? TaskData.createTimeStamp(
+          _data.endTime.hour, _data.endTime.minute) : null;
       // Determine whether or not the task is active or expired
-      if (_data.startTime != null) {
-        int startTime = TaskData.createTimeStamp(
-            _data.startTime.hour, _data.startTime.minute);
+      if (_data.startTime != null && _data.endTime != null) {
+        if (currentTime >= startTime && currentTime < endTime) {
+          _isActive = true;
+          _isExpired = false;
+        }
+        else if (currentTime >= endTime) {
+          _isActive = false;
+          _isExpired = true;
+        }
+      }
+      else if (_data.startTime != null) {
         if (currentTime >= startTime) {
           _isActive = true;
         }
@@ -53,16 +66,13 @@ class TaskState extends State<Task> { // TODO: implement theme data
           _isActive = false;
         }
       }
-      if (_data.endTime != null) {
-        int endTime = TaskData.createTimeStamp(
-            _data.endTime.hour, _data.endTime.minute);
+      else if (_data.endTime != null) {
         if (currentTime >= endTime) {
           _isActive = false;
           _isExpired = true;
         }
         else {
           _isActive = true;
-          _isExpired = false;
         }
       }
     }
@@ -80,8 +90,9 @@ class TaskState extends State<Task> { // TODO: implement theme data
         if (_data.startTime != null && TaskData.dateToString(_data.date) ==
             TaskData.dateToString(currentTime)) {
           NotificationScheduler.cancelNotification(_data.id);
-          _updateStatusStartTimer.cancel();
+          _updateStatusStartTimer?.cancel();
         }
+        // TODO: fix issue with calling setState from timer
         // Schedule local notification
         DateTime newStartTime = DateTime(
             currentTime.year,
@@ -124,7 +135,7 @@ class TaskState extends State<Task> { // TODO: implement theme data
         if (prevStartTime.isAfter(currentTime)) {
           NotificationScheduler.cancelNotification(newData.id);
           // Cancel start timer
-          _updateStatusStartTimer.cancel();
+          _updateStatusStartTimer?.cancel();
         }
       }
     }
@@ -137,15 +148,15 @@ class TaskState extends State<Task> { // TODO: implement theme data
         // Cancel previous end timer
         if (_data.endTime != null && TaskData.dateToString(_data.date) ==
             TaskData.dateToString(currentTime)) {
-          _updateStatusEndTimer.cancel();
+          _updateStatusEndTimer?.cancel();
         }
         // Schedule end timer
         DateTime newEndTime = DateTime(
             currentTime.year,
             currentTime.month,
             currentTime.day,
-            _data.endTime.hour,
-            _data.endTime.minute
+            newData.endTime.hour,
+            newData.endTime.minute
         );
         if (newEndTime.isAfter(currentTime)) {
           // Add a minute to properly trigger expiry as the then current time
@@ -168,15 +179,16 @@ class TaskState extends State<Task> { // TODO: implement theme data
       else if (TaskData.dateToString(_data.date) ==
           TaskData.dateToString(currentTime)) {
         // Cancel end timer
-        _updateStatusEndTimer.cancel();
+        _updateStatusEndTimer?.cancel();
       }
     }
   }
 
-  void _onChecked(bool) {
+  void _onChecked(bool newValue) {
     setState(() {
-      _data.isDone = bool;
-      _listModel.submitTaskEdit(_data);
+      bool prev = _data.isDone;
+      _data.isDone = newValue;
+      _listModel.onCheckboxEvent(_data, prev, newValue);
     });
   }
 
@@ -228,7 +240,8 @@ class TaskState extends State<Task> { // TODO: implement theme data
         sizeFactor: _animation,
         child: Card(
           shape: Border(
-            bottom: _isActive ? BorderSide(color: Colors.blue) : BorderSide.none
+            bottom: _isActive && !_data.isDone ?
+              BorderSide(color: Colors.blue) : BorderSide.none
           ),
           child: Padding(
             padding: const EdgeInsets.only(
@@ -245,7 +258,8 @@ class TaskState extends State<Task> { // TODO: implement theme data
                   ),
                   child: Checkbox(
                       value: _data.isDone,
-                      onChanged: _data.isSet && !_isExpired ? _onChecked : null,
+                      onChanged: _data.isSet && !_isExpired && !_isLocked ?
+                        (bool newValue) => _onChecked(newValue) : null
                   ),
                 ),
                 Expanded(
@@ -333,6 +347,8 @@ abstract class ITaskList {
   bool isLocked();
 
   void submitTaskEdit(TaskData data);
+
+  void onCheckboxEvent(TaskData data, bool prevValue, bool newValue);
 
   void moveToTop(TaskData data);
 

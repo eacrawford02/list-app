@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
 import 'package:listapp/widgets/list.dart';
 import 'package:listapp/widgets/task.dart';
 import 'package:listapp/models/task_data.dart';
 import 'package:listapp/utils/save_manager.dart';
 
+enum ListEvents {EDIT_TASK, REMOVE_TASK}
+
 typedef _GetTimeFunction = TimeOfDay Function(int index);
+typedef ListEventCallback = Function(ListEvents event);
 
 class TaskList implements IListData<TaskData>, ITaskList {
 
   SaveManager _saveManager;
   Future<void> _initialized;
+  ListEventCallback _eventCallback;
   List<TaskData> _list;
   // By subtracting one from the length, we can use a spacer widget as the last
   // element of the list
@@ -36,20 +37,39 @@ class TaskList implements IListData<TaskData>, ITaskList {
   Function _refreshListWidget;
   Function _scrollTo;
 
-  TaskList({int initialTaskId}) {
+  TaskList(DateTime listDate, {int initialTaskId,
+    @required ListEventCallback eventCallback}) {
+    _list = List();
+    _listDate = listDate;
+
     _initialized = _init(initialTaskId);
-    _listWidget = ListWidget(this, _initialized, _key);
+    _eventCallback = eventCallback;
+    // The list widget may not always be built immediately (as is the case with
+    // a tabbed list widget), so we must provide a callback for any operations
+    // we want performed when it is built--in this case scrolling to the
+    // initial task
+    _listWidget = ListWidget(this, _initialized, UniqueKey(), () {
+      int initialIndex = 0;
+      if (initialTaskId != null) {
+        for (int i = 0; i < _listLength; i++) {
+          if (_list[i].id == initialTaskId) {
+            initialIndex = i;
+          }
+        }
+      }
+      _scrollTo(initialIndex);
+    });
     // TODO: clean up print statements
   }
 
   Future<void> _init(int initialTaskId) async {
-    _list = List();
-    _listDate = DateTime.now();
     _timedHead = 0;
     _timedTail = 0;
     _numTasks = 0;
     _numCompletedTasks = 0;
-    _saveManager = await SaveManager.getManager();
+    _saveManager = SaveManager();
+    await _saveManager.init();
+    print("loading data on ${TaskData.dateToString(_listDate)}");
     Map<String, dynamic> listData = await _saveManager.loadListData(_listDate);
     listData != null ? _isLocked = listData["isLocked"] : _isLocked = false;
     await _loadData().then((value) {
@@ -64,7 +84,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
           }
         }
       }
-      _scrollTo(initialIndex);
+      _scrollTo?.call(initialIndex);
       _refreshListWidget?.call();
     });
     // Now that the list model has completed initialization, refresh the list
@@ -158,6 +178,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
     print("list length is ${_list.length}");
     // Add the spacer widget to the end of the list
     _list.add(null);
+    print("null added on ${TaskData.dateToString(_listDate)}");
     // Update saved indices for each task in the newly constructed list
     _saveManager.updateIndices(date, _list, 0, _listLength - 1);
   }
@@ -201,40 +222,42 @@ class TaskList implements IListData<TaskData>, ITaskList {
   void _timeSort(TaskData data, TimeOfDay taskTime, _GetTimeFunction getTime) {
     int timeStamp = TaskData.createTimeStamp(taskTime.hour, taskTime.minute);
     // If first scheduled task in the list
-    if (_timedHead == _timedTail) {
+    if (_timedHead == _timedTail && !_list[_timedHead].isScheduled) {
       _list.insert(_timedHead, data);
-      _timedTail++;
       return;
     }
     print("head $_timedHead");
     print("tail $_timedTail");
     for (int i = _timedHead; i <= _timedTail; i++) {
-      // If the end of the list has been reached
-      if (i == _timedTail) {
-        _list.insert(_timedTail, data);
+      // Perform sort
+      print("object bruh");
+      int indexTimeStamp = TaskData.createTimeStamp(
+          getTime(i).hour,
+          getTime(i).minute
+      );
+      print(timeStamp);
+      print(indexTimeStamp);
+      if (timeStamp < indexTimeStamp) {
+        _list.insert(i, data);
         _timedTail++;
         return;
       }
-      // Perform normal sort
-      else {
-        print("object bruh");
-        int indexTimeStamp = TaskData.createTimeStamp(
-            getTime(i).hour,
-            getTime(i).minute
-        );
-        if (timeStamp < indexTimeStamp) {
-          _list.insert(i, data);
-          _timedTail++;
-          return;
-        }
-      }
     }
+    // If the end of the list has been reach, insert at the last element. Note
+    // that it's only possible to insert at _timedTail + 1 because of the
+    // presence of an empty element at the end of the list
+    _list.insert(_timedTail + 1, data);
+    _timedTail++;
+    return;
   }
 
   void addNewTask({TaskData taskData}) {
     _list.insert(
         _list.length - 1,
-        taskData ?? TaskData(id: DateTime.now().millisecondsSinceEpoch)
+        taskData ?? TaskData(
+          id: DateTime.now().millisecondsSinceEpoch,
+          date: _listDate
+        )
     );
     _scrollTo(_listLength);
     _listWidgetState.insertItem(_listLength - 1);
@@ -323,6 +346,20 @@ class TaskList implements IListData<TaskData>, ITaskList {
         0,
         _numTasks - 1
     );
+    // Notify parent class of edit
+    _eventCallback(ListEvents.EDIT_TASK);
+  }
+
+  @override
+  void onCheckboxEvent(TaskData data, bool prevValue, bool newValue) {
+    if (!prevValue && newValue) {
+      _numCompletedTasks++;
+    }
+    else if (prevValue && !newValue) {
+      _numCompletedTasks--;
+    }
+    _saveManager.saveTask(data, index: _seek(data));
+    _eventCallback(ListEvents.EDIT_TASK);
   }
 
   @override
@@ -414,6 +451,8 @@ class TaskList implements IListData<TaskData>, ITaskList {
             Task(this, animation, taskData, UniqueKey())
         )
     );
+    // Notify parent of task removal
+    _eventCallback(ListEvents.REMOVE_TASK);
   }
 
   @override
@@ -450,6 +489,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
   // list
   @override
   Widget getItemWidget(int index, Animation<double> animation) {
+    print("object");
     if (_list[index] != null) {
       return Task(this, animation, _list[index], UniqueKey());
     }
@@ -460,6 +500,10 @@ class TaskList implements IListData<TaskData>, ITaskList {
 
   Future<void> getInitFuture() {
     return _initialized;
+  }
+
+  DateTime getListDate() {
+    return _listDate;
   }
 
   int getNumTasks() {
@@ -475,16 +519,42 @@ class TaskList implements IListData<TaskData>, ITaskList {
   }
 
   Future<void> reload() {
-    return _init(null);
+    int length = _listLength;
+    for (int i = _numTasks; i < length; i++) {
+      TaskData emptyData = _list[_numTasks];
+      _list.removeAt(_numTasks);
+      _listWidgetState.removeItem(
+          _numTasks,
+              (context, animation) => _removeItemCallback(
+              Task(this, animation, emptyData, UniqueKey())
+          )
+      );
+    }
+    Future<void> init = _init(null);
+    _refreshListWidget(reinitializeFuture: init);
+    return init;
   }
 
   void scrollTo(int index) {
     _scrollTo(index);
+    _refreshListWidget();
   }
 
   void lockTasks() {
     _isLocked = true;
+    int length = _listLength;
+    for (int i = _numTasks; i < length; i++) {
+      TaskData emptyData = _list[_numTasks];
+      _list.removeAt(_numTasks);
+      _listWidgetState.removeItem(
+          _numTasks,
+              (context, animation) => _removeItemCallback(
+              Task(this, animation, emptyData, UniqueKey())
+          )
+      );
+    }
     _refreshListWidget();
+    _saveManager.saveListData(_listDate, true);
   }
 
 }

@@ -10,14 +10,23 @@ class ActionWidgetCollection {
   }
 
   void addAction(String name, Widget widget) {
-    _actionWidgets.add(_ActionWidget(name, widget));
+    _actionWidgets.add(_ActionWidget(
+        name,
+        Expanded(
+          flex: 1,
+          child: widget,
+        )
+    ));
   }
 
   void setAction(String name, Widget updatedWidget) {
     for (int i = 0; i < _actionWidgets.length; i++) {
       _ActionWidget actionWidget = _actionWidgets[i];
       if (actionWidget._name == name) {
-        actionWidget._widget = updatedWidget;
+        actionWidget._widget = Expanded(
+          flex: 1,
+          child: updatedWidget
+        );
       }
     }
   }
@@ -39,7 +48,7 @@ class ActionWidgetCollection {
   }
 
   Widget getLayout() {
-    return BottomActionBar(getActionWidgets());
+    return BottomActionBar(getActionWidgets(), UniqueKey());
   }
 }
 

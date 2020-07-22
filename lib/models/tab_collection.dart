@@ -8,11 +8,13 @@ class TabCollection {
   List<Widget> _tabViews;
   Map<Widget, Function> _callbacks;
   TabController _tabController;
+  bool _refreshFlag;
 
   TabCollection(this._vsync) {
     _tabs = List();
     _tabViews = List();
     _callbacks = Map();
+    _refreshFlag = false;
   }
 
   void addTab({String title, Icon icon, @required Widget view}) {
@@ -24,6 +26,18 @@ class TabCollection {
 
   void addTabChangeCallback(Widget targetView, Function callback) {
     _callbacks[targetView] = callback;
+  }
+
+  void updateTabView(Widget prevView, Widget newView) {
+    for(int i = 0; i < _tabViews.length; i++) {
+      if (_tabViews[i] == prevView) {
+        _tabViews[i] = newView;
+        Function callBack = _callbacks[prevView];
+        _callbacks.remove(prevView);
+        _callbacks[newView] = callBack;
+      }
+    }
+    _refreshFlag = true;
   }
 
   void setController() {
@@ -47,7 +61,18 @@ class TabCollection {
     return TabBarView(
       controller: _tabController,
       children: _tabViews,
+      key: _getKey()
     );
+  }
+
+  Key _getKey() {
+    if (_refreshFlag) {
+      _refreshFlag = false;
+      return UniqueKey();
+    }
+    else {
+      return null;
+    }
   }
 
 }

@@ -5,12 +5,9 @@ import 'package:sqflite/sqflite.dart';
 
 class SaveManager {
 
-  static SaveManager _instance;
   Future<Database> _database;
 
-  SaveManager._();
-
-  Future<void> _init() async {
+  Future<void> init() async {
     // Open the database and store the reference
     _database = openDatabase(
       // Set the path to the database
@@ -36,17 +33,6 @@ class SaveManager {
     );
   }
 
-  static Future<SaveManager> getManager() async {
-    if (_instance == null) {
-      _instance = SaveManager._();
-      await _instance._init();
-      return _instance;
-    }
-    else {
-      return _instance;
-    }
-  }
-
   Future<Map<String, dynamic>> loadListData(DateTime listDate) async {
     // Get a reference to the database
     final Database db = await _database;
@@ -61,7 +47,10 @@ class SaveManager {
     // Find the correct list data
     for (int i = 0; i < maps.length; i++) {
       if (maps[i]["date"] == TaskData.dateToString(listDate)) {
-        return maps[i];
+        Map<String, dynamic> map = Map();
+        map["date"] = maps[i]["date"];
+        map["isLocked"] = maps[i]["isLocked"] == 1 ? true : false;
+        return map;
       }
     }
     return null;
@@ -241,7 +230,10 @@ class SaveManager {
     }
     await db.insert(
       "taskListData",
-      {"isLocked" : locked ? 1 : 0}
+      {
+        "date" : date,
+        "isLocked" : locked ? 1 : 0
+      }
     );
   }
 

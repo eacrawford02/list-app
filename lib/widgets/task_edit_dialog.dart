@@ -76,11 +76,14 @@ class TaskEditDialogState extends State<TaskEditDialog> {
               Expanded(
                   child: TextField(
                       controller: _textController,
+                      textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
                           hintText: _taskData.isSet ? "" : "E.g. Go for a run"
                       ),
                       onSubmitted: (String value) {
-                        _text = value;
+                        if (_textController.text != "") {
+                          _text = value;
+                        }
                       }
                   )
               ),
@@ -192,6 +195,9 @@ class TaskEditDialogState extends State<TaskEditDialog> {
         FlatButton(
           child: Text("Save"),
           onPressed: () {
+            if (_textController.text != "") {
+              _text = _textController.text;
+            }
             int start;
             int end;
             if (_startTime != null && _endTime != null) {
@@ -215,6 +221,13 @@ class TaskEditDialogState extends State<TaskEditDialog> {
         )
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+
+    _textController.dispose();
   }
 
 }
