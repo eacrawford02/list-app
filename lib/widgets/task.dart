@@ -33,14 +33,15 @@ class TaskState extends State<Task> { // TODO: implement theme data
   Timer _updateStatusStartTimer;
   Timer _updateStatusEndTimer;
 
-  TaskState(this._listModel, this._animation, this._data) {
+  TaskState(this._listModel, this._animation, TaskData data) {
     _isLocked = _listModel.isLocked();
+    _data = data;
     _updateStatus();
-    _setNotifications(_data);
   }
 
   void _updateStatus() {
-    if (_data.isScheduled) {
+    if (_data.isScheduled && TaskData.dateToString(_data.date) ==
+        TaskData.dateToString(DateTime.now())) {
       TimeOfDay timeRef = TimeOfDay.now();
       int currentTime = TaskData.createTimeStamp(timeRef.hour, timeRef.minute);
       int startTime = _data.startTime != null ? TaskData.createTimeStamp(
@@ -197,7 +198,7 @@ class TaskState extends State<Task> { // TODO: implement theme data
       context: context,
       builder: (BuildContext context) => TaskEditDialog(_data)
     );
-    if (newData.isSet) {
+    if (newData.isSet && newData != _data) {
       _setNotifications(newData);
 
       setState(() {
@@ -258,7 +259,9 @@ class TaskState extends State<Task> { // TODO: implement theme data
                   ),
                   child: Checkbox(
                       value: _data.isDone,
-                      onChanged: _data.isSet && !_isExpired && !_isLocked ?
+                      onChanged: _data.isSet && !_isExpired && !_isLocked &&
+                          TaskData.dateToString(_data.date) ==
+                              TaskData.dateToString(DateTime.now()) ?
                         (bool newValue) => _onChecked(newValue) : null
                   ),
                 ),

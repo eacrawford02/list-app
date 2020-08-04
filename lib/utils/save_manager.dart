@@ -75,7 +75,7 @@ class SaveManager {
     // index, because insertions at an index exceeding the length of a growable
     // list are not possible
     List<TaskData> taskList = List(scheduledTasks.length);
-    int numTasks = 0;
+    int unindexedElement = scheduledTasks.length - 1;
     for (int i = 0; i < scheduledTasks.length; i++) {
       print("scheduled tasks length ${scheduledTasks.length}");
       // Get the task data associated with this ID
@@ -131,9 +131,10 @@ class SaveManager {
       }
       else {
         // Simply add the data on to the end of this list
-        taskList[numTasks] = taskData;
+        print("add to end at $unindexedElement");
+        taskList[unindexedElement] = taskData;
+        unindexedElement--;
       }
-      numTasks++;
     }
     // Simply convert the fixed-length task list to a growable one
     List<TaskData> temp = List();
@@ -172,7 +173,9 @@ class SaveManager {
       TaskData taskData = TaskData(
         id: id,
         isSet: true,
-        isDone: savedTask[0]["isDone"] == 0 ? false : true,
+        // Repeat tasks should load in already done if they were checked on a
+        // previous day
+        isDone: false,
         text: savedTask[0]["text"],
         isScheduled: savedTask[0]["isScheduled"] == 0 ? false : true,
         startTime: (savedTask[0]["startTimeH"] == null ||
@@ -389,11 +392,25 @@ class SaveManager {
       // change made to a task that has been saved. In both cases, the task
       // being updated will already exist in the scheduled tasks table for that
       // date
-      final List<Map<String, dynamic>> prevScheduledData = await db.query(
-          "scheduledTasks_$date",
-          where: "taskId = ?",
-          whereArgs: [taskData[i].id]
-      );
+      List<Map<String, dynamic>> prevScheduledData;
+      try {
+        prevScheduledData = await db.query(
+            "scheduledTasks_$date",
+            where: "taskId = ?",
+            whereArgs: [taskData[i].id]
+        );
+      }
+      on DatabaseException {
+        prevScheduledData = List(0);
+      }
+      if (prevScheduledData.length == 0) {
+        try {
+          await db.execute(
+              "CREATE TABLE scheduledTasks_$date("
+                  "taskId INTEGER PRIMARY KEY, taskIndex INTEGER)"
+          );
+        } catch (e) {}
+      }
       // Make sure to delete the old copy, if there is one
       if (prevScheduledData.length != 0) {
         await db.delete(

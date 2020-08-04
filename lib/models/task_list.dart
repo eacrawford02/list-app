@@ -95,9 +95,33 @@ class TaskList implements IListData<TaskData>, ITaskList {
     // TODO: fix issue where a repeating task that is deleted gets reloaded -> repeatLoadFlag in saved task data
     // Load task data from database
     String date = TaskData.dateToString(_listDate);
-    List<TaskData> scheduledTasks = await _saveManager.loadScheduledTasks(date);
+    // TODO: correct to just assign _list to loaded unscheduled tasks, and remove the list parameter from the _addToList method
+    List<TaskData> unsortedScheduledTasks =
+        await _saveManager.loadScheduledTasks(date);
     List<TaskData> repeatTasks = await _saveManager.loadRepeatTasks(date,
         _listDate.weekday - 1);
+    List<TaskData> scheduledTasks = List();
+    scheduledTasks.add(null);
+    bool shouldAdd = false;
+    // If this is the first time the scheduled task list is being loaded for
+    // this date, then it may be unsorted. Thus, we must ensure that it is
+    // sorted correctly before indexing it
+    for (int i = 0; i < unsortedScheduledTasks.length; i++) {
+      print(unsortedScheduledTasks[i].text);
+      _numTasks++;
+      if (unsortedScheduledTasks[i].isScheduled || shouldAdd) {
+        shouldAdd = true;
+        _addToList(scheduledTasks, unsortedScheduledTasks[i]);
+      }
+      else {
+        scheduledTasks.insert(i, unsortedScheduledTasks[i]);
+        _timedHead++;
+        _timedTail++;
+      }
+    }
+    _timedHead = 0;
+    _timedTail = 0;
+    scheduledTasks.removeLast();
     // We must check each repeating task in the list of scheduled tasks
     // against the list of repeating tasks in order to account for tasks that
     // have been set to no longer repeat on this day of the week. These tasks
@@ -172,7 +196,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
         print("----------------------------------------");
         print(repeatTasks[i].text);
         _numTasks++;
-        _addToList(repeatTasks[i]);
+        _addToList(_list, repeatTasks[i]);
       }
     }
     print("list length is ${_list.length}");
@@ -193,37 +217,40 @@ class TaskList implements IListData<TaskData>, ITaskList {
     throw Exception("Item '$text' not found in list");
   }
 
-  void _addToList(TaskData data, {int prevPos}) {
+  void _addToList(List<TaskData> list, TaskData data, {int prevPos}) {
     // Sort and insert the task data
     if (data.isScheduled) {
       // If the task is given a start time, then sort it based on that
       if (data.startTime != null) {
-        _timeSort(data, data.startTime, (index) {
-          return _list[index].startTime;
+        _timeSort(list, data, data.startTime, (index) {
+          return list[index].startTime;
         });
       }
       // If not (only given an end time), then sort it based on the end time
       else {
-        _timeSort(data, data.endTime, (index) {
-          return _list[index].endTime;
+        _timeSort(list, data, data.endTime, (index) {
+          return list[index].endTime;
         });
       }
     }
     else {
       if (prevPos != null && prevPos != _listLength) {
-        _list.insert(prevPos, data);
+        list.insert(prevPos, data);
       }
       else {
-        _list.insert(_numTasks - 1, data);
+        list.insert(_numTasks - 1, data);
       }
     }
   }
 
-  void _timeSort(TaskData data, TimeOfDay taskTime, _GetTimeFunction getTime) {
+  void _timeSort(List<TaskData> list, TaskData data, TimeOfDay taskTime,
+      _GetTimeFunction getTime) {
     int timeStamp = TaskData.createTimeStamp(taskTime.hour, taskTime.minute);
     // If first scheduled task in the list
-    if (_timedHead == _timedTail && !_list[_timedHead].isScheduled) {
-      _list.insert(_timedHead, data);
+    bool isScheduledAtHead = list.length > 0 && list[_timedHead] != null ?
+      list[_timedHead].isScheduled : false;
+    if (_timedHead == _timedTail && (!isScheduledAtHead || _numTasks == 0)) {
+      list.insert(_timedHead, data);
       return;
     }
     print("head $_timedHead");
@@ -238,7 +265,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
       print(timeStamp);
       print(indexTimeStamp);
       if (timeStamp < indexTimeStamp) {
-        _list.insert(i, data);
+        list.insert(i, data);
         _timedTail++;
         return;
       }
@@ -246,7 +273,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
     // If the end of the list has been reach, insert at the last element. Note
     // that it's only possible to insert at _timedTail + 1 because of the
     // presence of an empty element at the end of the list
-    _list.insert(_timedTail + 1, data);
+    list.insert(_timedTail + 1, data);
     _timedTail++;
     return;
   }
@@ -301,7 +328,7 @@ class TaskList implements IListData<TaskData>, ITaskList {
             TaskData.dateToString(_listDate)) {
       // Increment the number of tasks because we are adding it to the list
       _numTasks++;
-      _addToList(taskData);
+      _addToList(_list, taskData);
     }
     else {
       // In this case, since the task isn't added/re-added to the list, the
@@ -328,20 +355,8 @@ class TaskList implements IListData<TaskData>, ITaskList {
       index = null;
     }
     await _saveManager.saveTask(taskData, index: index);
-    // If the task ends up being removed from today's list, then in addition to
-    // updating the indices of the list that the task is being sent to, we must
-    // also update the indices of today's list to account for its removal
-    if (prevSet && TaskData.dateToString(taskData.date) !=
-        TaskData.dateToString(_listDate)) {
-      _saveManager.updateIndices(
-          TaskData.dateToString(_listDate),
-          _list,
-          0,
-          _numTasks - 1
-      );
-    }
-    _saveManager.updateIndices( // TODO: improve selection
-        TaskData.dateToString(taskData.date),
+    _saveManager.updateIndices(
+        TaskData.dateToString(_listDate),
         _list,
         0,
         _numTasks - 1
