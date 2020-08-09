@@ -16,21 +16,36 @@ class TabbedListBarState extends State<TabbedListBar>
   TabController _controller;
   List<Widget> _tabs;
   List<Widget> _tabViews;
+  double _prevAnimValue = 0.0;
 
   @override
   void initState() {
     super.initState();
 
     _controller = TabController(length: widget.tabItems.length, vsync: this);
-    widget.tabItems.forEach((element) {
-      if (element.title != null) {
-        _tabs.add(Text(element.title));
-      }
-      else {
-        _tabs.add(element.icon);
-      }
-      _tabViews.add(element.tabView);
-    });
+    _tabs = List();
+    _tabViews = List();
+    for (int i = 0; i < widget.tabItems.length; i++) {
+      TabItem item = widget.tabItems[i];
+      _tabs.add(Tab(text: item.title, icon: item.icon));
+      _tabViews.add(item.tabView);
+      _controller.animation.addListener(() {
+        int index = i;
+        Animation animation = _controller.animation;
+        if (animation.value > _prevAnimValue && // Swiping to the right
+            (animation.value > index - 0.5 && animation.value <= index) &&
+            _prevAnimValue < index - 0.5) { // Coming from the prev page
+          widget.tabItems[i].onChangeCb?.call();
+          _prevAnimValue = animation.value;
+        }
+        else if (animation.value < _prevAnimValue && // Swiping to the left
+            (animation.value < index + 0.5 && animation.value >= index) &&
+            _prevAnimValue > index + 0.5) { // Coming from the prev page
+          widget.tabItems[i].onChangeCb?.call();
+          _prevAnimValue = animation.value;
+        }
+      });
+    }
   }
 
   @override
@@ -64,8 +79,9 @@ class TabItem {
   final String title;
   final Icon icon;
   final Widget tabView;
+  final VoidCallback onChangeCb;
 
-  TabItem({this.title, this.icon, @required this.tabView}) {
+  TabItem({this.title, this.icon, @required this.tabView, this.onChangeCb}) {
     if (title == null && icon == null) {
       throw Exception("Either a title or an icon must be provided");
     }

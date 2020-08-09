@@ -4,7 +4,7 @@ import 'package:listapp/widgets/tabbed_list_bar.dart';
 
 class HomePage extends StatefulWidget {
   @override
-  State<StatefulWidget> createState() => HomePageState();
+  HomePageState createState() => HomePageState();
 }
 
 class HomePageState extends State<HomePage> {
@@ -18,8 +18,6 @@ class HomePageState extends State<HomePage> {
     });
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return HomePageData(
@@ -30,11 +28,30 @@ class HomePageState extends State<HomePage> {
           children: <Widget>[
             TabbedListBar(
               title: title,
-              actionButtons: <IconButton>[],
-              tabItems: <TabItem>[]
+              actionButtons: <IconButton>[ // Delete contents
+                IconButton(icon: Icon(Icons.ac_unit), onPressed: null)
+              ],
+              tabItems: <TabItem>[ // Delete contents
+                TabItem(
+                  title: "page 1",
+                  tabView: Container(
+                    decoration: BoxDecoration(color: Colors.green),
+                  )
+                ),
+                TabItem(
+                  title: "page 2",
+                  tabView: Container(
+                    decoration: BoxDecoration(color: Colors.blue)
+                  )
+                )
+              ]
             ),
             BottomActionBar(
-              actionWidgets: <Widget>[],
+              actionWidgets: <Widget>[ // Delete contents
+                FloatingActionButton(
+                  onPressed: null,
+                )
+              ],
             )
           ]
         )
