@@ -1,6 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
 class Utils {
+  static Future<Database> _database;
+
+  static Future<Database> getDatabase() async {
+    if (_database == null) {
+      _database = openDatabase(
+        // Set the path to the database
+        join(await getDatabasesPath(), "app_database"),
+        version: 1,
+        // When the database is first created, create each table needed to store
+        // the list's data
+        onCreate: (db, version) async {
+          await db.execute("CREATE TABLE taskListData(date TEXT PRIMARY KEY,"
+              " isLocked INTEGER)"
+          );
+          await db.execute("CREATE TABLE tasks(id INTEGER PRIMARY KEY,"
+              " isSet INTEGER, isDone INTEGER, text TEXT,"
+              " isScheduled INTEGER, startTimeH INTEGER, startTimeM INTEGER,"
+              " endTimeH INTEGER, endTimeM INTEGER, date TEXT)"
+          );
+          for (int i = 0; i < 7; i++) {
+            // Each table here functions as an array
+            // We can use the DatTime day constants to "look up" each table
+            await db.execute("CREATE TABLE repeatDay_$i(taskId INTEGER)");
+          }
+        }
+      );
+    }
+    return _database;
+  }
+
   static int createTimeStamp(int hour, int minute) {
     return (hour * 100) + minute;
   }
