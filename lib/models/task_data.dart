@@ -23,22 +23,28 @@ class TaskData {
     this.startTime,
     this.endTime,
     DateTime date
-  }) : this.date = date ?? DateTime.now() {
-    loadData();
-  }
+  }) : this.date = date ?? DateTime.now();
 
   // We don't have to somehow await this method because it's called from the
   // "_initialized" future in the task list
-  void loadData() async {
+  Future<void> loadData() async {
     final Database db = await Utils.getDatabase();
     String dateString = Utils.dateToString(date);
-    final List<Map<String, dynamic>> savedTask = await db.query(
-        "tasks",
-        where: "id = ?",
-        whereArgs: [id]
-    );
-    if (savedTask.length == 0)
-      throw Exception("Task '$id' does not exist in database");
+    List<Map<String, dynamic>> savedTask;
+    try {
+      savedTask = await db.query(
+          "tasks",
+          where: "id = ?",
+          whereArgs: [id]
+      );
+    }
+    on DatabaseException {
+      savedTask = List(0);
+    }
+    if (savedTask.length == 0) {
+      print("Task '$id' does not exist in database");
+      return;
+    }
     isSet = true;
     isDone = savedTask[0]["isDone"] == 0 ? false : true;
     text = savedTask[0]["text"];
@@ -56,8 +62,26 @@ class TaskData {
         minute: savedTask[0]["endTimeM"]
     );
     date = DateTime.parse(dateString.replaceAll(RegExp(r"_"), "-"));
+    for (int i = 0; i < 7; i++) {
+      List<Map<String, dynamic>> check;
+      try {
+        check = await db.query(
+            "repeatDay_$i",
+            where: "taskId = ?",
+            whereArgs: [id]
+        );
+      }
+      on DatabaseException {
+        check = List(0);
+      }
+      if (check.length == 1) {
+        repeatDays[i] = true;
+      }
+    }
   }
 
+  // A task can't save its own data because doing so would overwrite the
+  // prevDate field used in the TaskList's save method
   void saveData() async {
     final Database db = await Utils.getDatabase();
     List<Map<String, dynamic>> prevData;

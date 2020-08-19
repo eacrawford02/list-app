@@ -58,9 +58,10 @@ class ListItemState extends State<ListItem> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(data.title,
+                      Text(
+                        data.title,
                         style: TextStyle(
-                          fontSize: 24,
+                          //fontSize: 18, // TODO: fix later
                           fontWeight: FontWeight.bold
                         )
                       ),
@@ -111,7 +112,7 @@ class ListItemData {
   Color highlightColor;
 
   ListItemData({
-    Widget leftAction,
+    GetChildWidgets leftAction,
     this.title : "",
     this.text : "",
     this.textDecoration : TextDecoration.none,
@@ -119,6 +120,8 @@ class ListItemData {
     GetChildWidgets rightAction,
     this.isHighlighted : false,
     this.highlightColor : Colors.blue
-  }) : this.leftAction = leftAction ?? List(),
-        this.rightAction = rightAction ?? List();
+  }) {
+    this.leftAction = leftAction ?? (BuildContext c) => null;
+    this.rightAction = rightAction ?? (BuildContext c) => null;
+  }
 }
