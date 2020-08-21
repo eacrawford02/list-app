@@ -20,7 +20,7 @@ class TaskListData {
       maps = await db.query("taskListData"); // TODO: use where argument
     }
     on DatabaseException {
-      maps = List();
+      maps = List(0);
     }
     // Find the correct list data
     for (int i = 0; i < maps.length; i++) {
@@ -46,14 +46,19 @@ class TaskListData {
       int id = scheduledTaskTable[i]["taskId"];
       int index = scheduledTaskTable[i]["taskIndex"];
       bool isDeleted = scheduledTaskTable[i]["isDeleted"] == 1 ? true : false;
+      bool isDone = scheduledTaskTable[i]["isDone"] == 1 ? true : false;
       // Load TaskListItem objects
       TaskListItem item = TaskListItem(
-        data: TaskData(id: id),
+        data: TaskData(id: id, date: _listDate, isDone: isDone),
         listItemData: ListItemData(),
         isDeleted: isDeleted
       );
       await item.data.loadData();
-      if (index != null) {
+      if (index != null && temp[index] == null) {
+        temp[index] = item;
+      }
+      else if (index != null && temp[index] != null) {
+        temp[nonIndexedTail] = temp[index];
         temp[index] = item;
       }
       else {
@@ -66,7 +71,7 @@ class TaskListData {
     for (int i = 0; i < repeatTaskTable.length; i++) {
       int id = repeatTaskTable[i]["taskId"];
       TaskListItem item = TaskListItem(
-        data: TaskData(id: id),
+        data: TaskData(id: id, date: _listDate),
         listItemData: ListItemData()
       );
       await item.data.loadData(); // await to prevent rewrite of isDone
@@ -101,7 +106,7 @@ class TaskListData {
       int id = repeatTasks[i].data.id;
       bool present = false;
       for (int n = 0; n < taskList.length; n++) {
-        if (taskList[i].data.id == id) {
+        if (taskList[n].data.id == id) {
           present = true;
           break;
         }
@@ -129,7 +134,7 @@ class TaskListData {
     return taskTable;
   }
 
-  Future<void> saveListData(DateTime listDate, bool locked) async {
+  Future<void> saveListData(DateTime listDate) async {
     String date = Utils.dateToString(listDate);
     final Database db = await Utils.getDatabase();
     final List<Map<String, dynamic>> prevData = await db.query(
@@ -148,7 +153,7 @@ class TaskListData {
         "taskListData",
         {
           "date" : date,
-          "isLocked" : locked ? 1 : 0
+          "isLocked" : isLocked ? 1 : 0
         }
     );
   }
@@ -204,9 +209,11 @@ class TaskListData {
     // while a difference between the previously set date and the new date
     // indicates that a change has occurred and the saved data must be updated
     if (date == Utils.dateToString(DateTime.now()) || prevDate != date) {
-      if (prevDate != null) {
+      if (prevDate != null && !task.data.repeatDays.contains(true)) {
         // If a date change occurs and the previous date was set, then the data
-        // must be removed from the previous date's table
+        // must be removed from the previous date's table. However, we only
+        // want to delete the previous data if the task was transferred from
+        // one date to another, NOT if it persists across multiple dates
         await db.delete(
             "scheduledTasks_$prevDate",
             where: "taskId = ?",
@@ -229,7 +236,8 @@ class TaskListData {
               "CREATE TABLE scheduledTasks_$date("
                   "taskId INTEGER PRIMARY KEY, "
                   "taskIndex INTEGER, "
-                  "isDeleted INTEGER)"
+                  "isDeleted INTEGER,"
+                  "isDone INTEGER)"
           );
         } catch (e) {}
       }
@@ -254,7 +262,8 @@ class TaskListData {
         {
           "taskId" : task.data.id,
           "taskIndex" : index,
-          "isDeleted" : 0
+          "isDeleted" : task.isDeleted ? 1 : 0,
+          "isDone" : task.data.isDone ? 1 : 0
         },
       );
     }
@@ -274,6 +283,7 @@ class TaskListData {
     );
     // Remove task from tasks table only if task isn't set to repeat
     if (!task.data.repeatDays.contains(true)) {
+      // TODO: replace with task.data.unsave
       await db.delete(
           "tasks",
           where: "id = ?",
@@ -288,7 +298,8 @@ class TaskListData {
         {
           "taskId" : task.data.id,
           "taskIndex" : null,
-          "isDeleted" : 1
+          "isDeleted" : 1,
+          "isDone" : task.data.isDone ? 1 : 0
         },
       );
     }
@@ -297,16 +308,31 @@ class TaskListData {
   void updateIndices(String date, List<TaskListItem> tasks, int length) async {
     final Database db = await Utils.getDatabase();
     for (int i = 0; i < length; i++) {
-      // We don't have to use a try statement because this method should only
-      // ever be called on a list that has either been loaded from saved
-      // storage or following a change made to a task that has been saved.
-      // In both cases, the task being updated will already exist in the
-      // scheduled tasks table for that date
-      final List<Map<String, dynamic>> prevScheduledData = await db.query(
+      if (!tasks[i].data.isSet)
+        continue;
+      List<Map<String, dynamic>> prevScheduledData;
+      try {
+        prevScheduledData = await db.query(
           "scheduledTasks_$date",
           where: "taskId = ?",
           whereArgs: [tasks[i].data.id]
-      );
+        );
+      }
+      on DatabaseException {
+        prevScheduledData = List(0);
+      }
+      // If the new date's (or today's date's) table doesn't exist, create it
+      if (prevScheduledData.length == 0) {
+        try {
+          await db.execute(
+            "CREATE TABLE scheduledTasks_$date("
+                "taskId INTEGER PRIMARY KEY, "
+                "taskIndex INTEGER, "
+                "isDeleted INTEGER,"
+                "isDone INTEGER)"
+          );
+        } catch (e) {}
+      }
       // Make sure to delete the old copy, if there is one
       if (prevScheduledData.length != 0) {
         await db.delete(
@@ -319,7 +345,9 @@ class TaskListData {
         "scheduledTasks_$date",
         {
           "taskId" : tasks[i].data.id,
-          "taskIndex" : i
+          "taskIndex" : i,
+          "isDeleted" : tasks[i].isDeleted ? 1 : 0,
+          "isDone" : tasks[i].data.isDone ? 1 : 0
         },
       );
     }
