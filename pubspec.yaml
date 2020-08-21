@@ -27,6 +27,7 @@ dependencies:
   path:
   flutter_local_notifications: ^1.4.4+2
   scroll_to_index: any
+  intl: ^0.16.1
 
 
   # The following adds the Cupertino Icons font to your application.

@@ -1,21 +1,70 @@
+import 'dart:async';
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
+import 'package:listapp/models/task_list.dart';
 import 'package:listapp/widgets/bottom_action_bar.dart';
 import 'package:listapp/widgets/tabbed_list_bar.dart';
+import 'package:listapp/widgets/item_list.dart';
 
 class HomePage extends StatefulWidget {
+
+  final String notificationTaskId;
+
+  HomePage({this.notificationTaskId});
+
   @override
   HomePageState createState() => HomePageState();
 }
 
 class HomePageState extends State<HomePage> {
 
-  final String title = "List";
-  Data _data = Data();
+  final Data _data = Data();
+  GlobalKey<AnimatedListState> _currentTasksKey = GlobalKey();
+  GlobalKey<AnimatedListState> _futureTasksKey = GlobalKey();
+  TaskList _currentTasks;
+  TaskList _futureTasks;
+
+  void _init() {
+    _currentTasks = TaskList(
+        DateTime.now(),
+        onDataChange,
+        key: _currentTasksKey,
+        pageData: _data,
+        initialTaskId: widget.notificationTaskId != null ?
+        int.parse(widget.notificationTaskId) : null
+    );
+    _futureTasks = TaskList(
+        DateTime.now().add(Duration(days: 1)),
+        onDataChange,
+        key: _futureTasksKey,
+        pageData: _data
+    );
+    _data.tabbedTasks = _currentTasks;
+  }
 
   void onDataChange(bool shouldUpdate) {
     setState(() {
       _data.shouldUpdate = shouldUpdate;
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _init();
+    // Set end of day timer
+    DateTime tomorrow = DateTime.now().add(Duration(days: 1));
+    DateTime startOfDay = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
+    Duration diff = tomorrow.difference(startOfDay).abs();
+    Timer(
+      diff,
+      () {
+        setState(() {
+          _init();
+        });
+      }
+    );
   }
 
   @override
@@ -27,29 +76,133 @@ class HomePageState extends State<HomePage> {
         body: Stack(
           children: <Widget>[
             TabbedListBar(
-              title: title,
-              actionButtons: <IconButton>[ // Delete contents
-                IconButton(icon: Icon(Icons.ac_unit), onPressed: null)
+              title: "List  -  ${
+                  DateFormat.MMMEd().format(_data.tabbedTasks.getListDate())
+              }",
+              actionButtons: <IconButton>[
+                IconButton(
+                  icon: Icon(Icons.keyboard_arrow_up),
+                  onPressed: () => _data.tabbedTasks.scrollToTop()
+                ),
+                IconButton(
+                  icon: Icon(Icons.keyboard_arrow_down),
+                  onPressed: () => _data.tabbedTasks.scrollToBottom()
+                ),
+                IconButton(
+                  icon: Icon(Icons.refresh),
+                  onPressed: () => _data.tabbedTasks.reload()
+                )
               ],
-              tabItems: <TabItem>[ // Delete contents
+              tabItems: <TabItem>[
                 TabItem(
-                  title: "page 1",
-                  tabView: Container(
-                    decoration: BoxDecoration(color: Colors.green),
-                  )
+                  title: "Today's Tasks",
+                  tabView: ItemList(
+                    listKey: _currentTasksKey,
+                    listModel: _currentTasks,
+                    bottomOffset: 66,
+                    getPageData: (BuildContext context) =>
+                        HomePageData.of(context).data
+                  ),
+                  onChangeCb: () {
+                    _data.tabbedTasks = _currentTasks;
+                    onDataChange(true);
+                  }
                 ),
                 TabItem(
-                  title: "page 2",
-                  tabView: Container(
-                    decoration: BoxDecoration(color: Colors.blue)
-                  )
+                  title: "Future Tasks",
+                  tabView: ItemList(
+                    listKey: _futureTasksKey,
+                    listModel: _futureTasks,
+                    bottomOffset: 66,
+                    getPageData: (BuildContext context) =>
+                        HomePageData.of(context).data,
+                  ),
+                  onChangeCb: () {
+                    _data.tabbedTasks = _futureTasks;
+                    onDataChange(true);
+                  }
                 )
               ]
             ),
             BottomActionBar(
-              actionWidgets: <Widget>[ // Delete contents
+              actionWidgets: <Widget>[
+                _data.tabbedTasks == _currentTasks ? FloatingActionButton(
+                  mini: true,
+                  elevation: (_currentTasks.getNumTasks() == 0 ||
+                      _currentTasks.isLocked()) ? 0 : null,
+                  child: Icon(Icons.done),
+                  onPressed: (_currentTasks.getNumTasks() == 0 ||
+                      _currentTasks.isLocked()) ? null : () {
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: Text(
+                              "Done For The Day?",
+                              textAlign: TextAlign.center
+                          ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: Divider()
+                              ),
+                              Text(
+                                "This action will lock all tasks",
+                                textAlign: TextAlign.center,
+                              )
+                            ],
+                          ),
+                          actions: <Widget>[
+                            FlatButton(
+                              child: Text("Cancel"),
+                              onPressed: () => Navigator.of(context).pop(),
+                            ),
+                            FlatButton(
+                                child: Text("Save"),
+                                onPressed: () {
+                                  _currentTasks.lockTasks();
+                                  Navigator.of(context).pop();
+                                  onDataChange(true);
+                                }
+                            )
+                          ],
+                        );
+                      }
+                    );
+                  }
+                ) : Container(),
                 FloatingActionButton(
-                  onPressed: null,
+                  child: Icon(Icons.add),
+                  elevation: _data.tabbedTasks.isLocked() ? 0 : null,
+                  onPressed: !_data.tabbedTasks.isLocked() ?
+                      _data.tabbedTasks.addTask : null
+                ),
+                _data.tabbedTasks == _currentTasks ? FloatingActionButton(
+                  mini: true,
+                  child: Text(
+                    "${_currentTasks.getNumTasks() > 0 ?
+                    (_currentTasks.getNumCompletedTasks() /
+                        _currentTasks.getNumTasks()) * 100 ~/ 1: 0}%",
+                    textScaleFactor: 0.8,
+                  ),
+                  onPressed: null
+                ) : FloatingActionButton(
+                  mini: true,
+                  child: Icon(Icons.today),
+                  onPressed: () async {
+                    DateTime newDate = await showDatePicker(
+                      context: context,
+                      initialDate: _futureTasks.getListDate(),
+                      firstDate: DateTime.now().add(Duration(days: 1)),
+                      lastDate: DateTime.now().add(Duration(days: 36500))
+                    );
+                    if (newDate != null) {
+                      _futureTasks.reload(newDate: newDate);
+                      onDataChange(true);
+                    }
+                  }
                 )
               ],
             )
@@ -80,13 +233,8 @@ class HomePageData extends InheritedWidget {
   }
 }
 
-enum PageEvents {
-  SCROLL_TOP, SCROLL_BOTTOM, RELOAD, LOCK_LIST, ADD_TASK
-}
-
-class Data {
+class Data extends ListPageData {
   bool shouldUpdate = false;
-  List<PageEvents> events = List();
 
-  Widget currentTab;
+  TaskList tabbedTasks; // The task list under the currently selected tab
 }

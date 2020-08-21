@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 class BottomActionBar extends StatelessWidget {
   final List<Widget> actionWidgets;
 
-  BottomActionBar({this.actionWidgets});
+  BottomActionBar({this.actionWidgets}) {
+    for (int i = 0; i < actionWidgets.length; i++) {
+      Widget actionWidget = actionWidgets[i];
+      actionWidgets[i] = Expanded(flex: 1, child: actionWidget);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,7 +18,7 @@ class BottomActionBar extends StatelessWidget {
       right: 0,
       child: Container(
         decoration: BoxDecoration(
-          color: Color.fromRGBO(255, 0, 255, 0.5),
+          color: Color.fromRGBO(255, 255, 255, 0.95),
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(16),
             topRight: Radius.circular(16)
