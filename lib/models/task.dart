@@ -40,6 +40,7 @@ class Task {
 
   Task(this._listItemData, this._taskList, this._data) {
     // Initialize this object
+    _isLocked = _taskList.isLocked();
     _updateStatus();
     cancelNotifications(_data);
     _scheduleNotifications(_data);
@@ -52,9 +53,11 @@ class Task {
     _listItemData.highlightColor = Colors.blue;
     // Populate widget with checkbox and buttons
     _listItemData.leftAction = (BuildContext context) {
+      bool isToday = Utils.dateToString(_data.date) ==
+          Utils.dateToString(DateTime.now()) ? true : false;
       return Checkbox(
         value: _data.isDone,
-        onChanged: _data.isSet && !_isExpired && !_isLocked ?
+        onChanged: _data.isSet && !_isExpired && !_isLocked && isToday ?
             (bool newValue) => _onCheck(newValue) : null
       );
     };
@@ -116,7 +119,8 @@ class Task {
   }
 
   void _updateStatus() {
-    if (_data.isScheduled) {
+    if (Utils.dateToString(DateTime.now()) == Utils.dateToString(_data.date) &&
+        _data.isScheduled) {
       TimeOfDay timeRef = TimeOfDay.now();
       int currentTime = Utils.createTimeStamp(timeRef.hour, timeRef.minute);
       int startTime = _data.startTime != null ? Utils.createTimeStamp(
@@ -161,55 +165,56 @@ class Task {
   void _scheduleNotifications(TaskData data) {
     DateTime currentTime = DateTime.now();
     // Only schedule if task was set for today
-    if (Utils.dateToString(data.date) != Utils.dateToString(currentTime))
-      return;
-    if (data.startTime != null) {
-      // Schedule local notification
-      DateTime newStartTime = DateTime(
-          currentTime.year,
-          currentTime.month,
-          currentTime.day,
-          data.startTime.hour,
-          data.startTime.minute
-      );
-      if (newStartTime.isAfter(currentTime)) {
-        NotificationScheduler.scheduleNotification(
-            data.id,
-            "To-Do:",
-            data.text,
-            newStartTime
+    if (Utils.dateToString(data.date) == Utils.dateToString(currentTime) ||
+        (data.repeatDays[currentTime.weekday - 1] == true)) {
+      if (data.startTime != null) {
+        // Schedule local notification
+        DateTime newStartTime = DateTime(
+            currentTime.year,
+            currentTime.month,
+            currentTime.day,
+            data.startTime.hour,
+            data.startTime.minute
         );
-        // Schedule start timer
-        Duration countdown = currentTime.difference(newStartTime).abs();
-        _updateStatusStartTimer = Timer(
-          countdown,
-          () {
-            _updateStatus();
-          }
-        );
+        if (newStartTime.isAfter(currentTime)) {
+          NotificationScheduler.scheduleNotification(
+              data.id,
+              "To-Do:",
+              data.text,
+              newStartTime
+          );
+          // Schedule start timer
+          Duration countdown = currentTime.difference(newStartTime).abs();
+          _updateStatusStartTimer = Timer(
+              countdown,
+              () {
+                _updateStatus();
+              }
+          );
+        }
       }
-    }
-    if (data.endTime != null) {
-      // Schedule end timer
-      DateTime newEndTime = DateTime(
-          currentTime.year,
-          currentTime.month,
-          currentTime.day,
-          data.endTime.hour,
-          data.endTime.minute
-      );
-      if (newEndTime.isAfter(currentTime)) {
-        // Add a minute to properly trigger expiry as the then current time
-        // must be greater than the task's end time
-        Duration countdown = currentTime.difference(
-            newEndTime.add(Duration(minutes: 1))
-        ).abs();
-        _updateStatusEndTimer = Timer(
-          countdown,
-          () {
-            _updateStatus();
-          }
+      if (data.endTime != null) {
+        // Schedule end timer
+        DateTime newEndTime = DateTime(
+            currentTime.year,
+            currentTime.month,
+            currentTime.day,
+            data.endTime.hour,
+            data.endTime.minute
         );
+        if (newEndTime.isAfter(currentTime)) {
+          // Add a minute to properly trigger expiry as the then current time
+          // must be greater than the task's end time
+          Duration countdown = currentTime.difference(
+              newEndTime.add(Duration(minutes: 1))
+          ).abs();
+          _updateStatusEndTimer = Timer(
+              countdown,
+                  () {
+                _updateStatus();
+              }
+          );
+        }
       }
     }
   }
@@ -218,52 +223,57 @@ class Task {
     DateTime currentTime = DateTime.now();
     // Only cancel if task has been set for today (to ensure that we don't
     // cancel notifications that don't exist)
-    if (Utils.dateToString(data.date) != Utils.dateToString(currentTime))
-      return;
-    if (data.startTime != null) {
-      DateTime startTime = DateTime(
-          currentTime.year,
-          currentTime.month,
-          currentTime.day,
-          data.startTime.hour,
-          data.startTime.minute
-      );
-      // If startTime is in the future
-      if (startTime.isAfter(currentTime)) {
+    if (Utils.dateToString(data.date) == Utils.dateToString(currentTime) ||
+        data.repeatDays[currentTime.weekday - 1] == true) {
+      if (data.startTime != null) {
+        DateTime startTime = DateTime(
+            currentTime.year,
+            currentTime.month,
+            currentTime.day,
+            data.startTime.hour,
+            data.startTime.minute
+        );
+        // If startTime is in the future
+        if (startTime.isAfter(currentTime)) {
+          // Cancel start timer
+          _updateStatusStartTimer?.cancel();
+        }
         NotificationScheduler.cancelNotification(data.id);
-        // Cancel start timer
-        _updateStatusStartTimer?.cancel();
       }
-    }
-    if (data.endTime != null) {
-      DateTime endTime = DateTime(
-          currentTime.year,
-          currentTime.month,
-          currentTime.day,
-          data.endTime.hour,
-          data.endTime.minute
-      );
-      // If endTime is in the future
-      if (endTime.isAfter(currentTime)) {
-        _updateStatusEndTimer?.cancel();
+      if (data.endTime != null) {
+        DateTime endTime = DateTime(
+            currentTime.year,
+            currentTime.month,
+            currentTime.day,
+            data.endTime.hour,
+            data.endTime.minute
+        );
+        // If endTime is in the future
+        if (endTime.isAfter(currentTime)) {
+          _updateStatusEndTimer?.cancel();
+        }
       }
     }
   }
 
   void _onCheck(bool newValue) {
-    bool prev = _data.isDone;
-    _data.isDone = newValue;
-    if (prev && !newValue) { // Unchecked
-      // We don't have to cancel notifications first here because the checkbox
-      // can't be unchecked before it has been checked
-      _scheduleNotifications(_data);
+    // Handle check event only if task is scheduled for today
+    if (Utils.dateToString(_data.date) == Utils.dateToString(DateTime.now()) ||
+        _data.repeatDays[DateTime.now().weekday - 1]) {
+      bool prev = _data.isDone;
+      _data.isDone = newValue;
+      if (prev && !newValue) { // Unchecked
+        // We don't have to cancel notifications first here because the checkbox
+        // can't be unchecked before it has been checked
+        _scheduleNotifications(_data);
+      }
+      else if (!prev && newValue) { // Checked
+        cancelNotifications(_data);
+      }
+      _taskList.onTaskCheckEvent(_data, prev, newValue);
+      _listItemData.isHighlighted = _isActive && !newValue;
+      _listItemData.updateWidget();
     }
-    else if (!prev && newValue) { // Checked
-      cancelNotifications(_data);
-    }
-    _taskList.onTaskCheckEvent(_data, prev, newValue);
-    _listItemData.isHighlighted = _isActive && !newValue;
-    _listItemData.updateWidget();
   }
 
   void _showEditDialog(BuildContext context) async {
@@ -271,7 +281,7 @@ class Task {
       context: context,
       builder: (BuildContext context) => TaskEditDialog(_data)
     );
-    if (newData.isSet) {
+    if (newData?.isSet ?? false) {
       cancelNotifications(_data);
       _scheduleNotifications(newData);
       _data = newData;

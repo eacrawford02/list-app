@@ -46,7 +46,6 @@ class TaskData {
       return;
     }
     isSet = true;
-    isDone = savedTask[0]["isDone"] == 0 ? false : true;
     text = savedTask[0]["text"];
     isScheduled = savedTask[0]["isScheduled"] == 0 ? false : true;
     startTime = (savedTask[0]["startTimeH"] == null ||
@@ -108,7 +107,6 @@ class TaskData {
       {
         "id" : id,
         "isSet" : 1,
-        "isDone" : isDone ? 1 : 0,
         "text" : text,
         "isScheduled" : isScheduled ? 1 : 0,
         "startTimeH" : startTime != null ? startTime.hour : null,
