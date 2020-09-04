@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:intl/intl.dart';
+import 'package:android_alarm_manager/android_alarm_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:listapp/models/task_list.dart';
+import 'package:listapp/models/task_list_data.dart';
+import 'package:listapp/models/task.dart';
 import 'package:listapp/widgets/bottom_action_bar.dart';
 import 'package:listapp/widgets/tabbed_list_bar.dart';
 import 'package:listapp/widgets/item_list.dart';
@@ -53,7 +56,7 @@ class HomePageState extends State<HomePage> {
     super.initState();
 
     _init();
-    // Set end of day timer
+    // Set end of day timer (for if the app is open)
     DateTime tomorrow = DateTime.now().add(Duration(days: 1));
     DateTime startOfDay = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
     Duration diff = tomorrow.difference(startOfDay).abs();
@@ -64,6 +67,28 @@ class HomePageState extends State<HomePage> {
           _init();
         });
       }
+    );
+    // Set end of day timer (for if the app is closed) to schedule future
+    // notifications
+    AndroidAlarmManager.periodic(
+      Duration(days: 1),
+      0,
+      () async {
+        TaskListData listData = TaskListData(DateTime.now());
+        List<TaskListItem> taskList = await listData.loadTasks();
+        taskList.forEach((element) {
+          Task(element.listItemData, null, element.data);
+        });
+      },
+      startAt: DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        DateTime.now().add(Duration(days: 1)).day,
+        0,
+        1 // TODO: try changing this (minutes) to zero
+      ),
+      exact: true,
+      rescheduleOnReboot: true
     );
   }
 

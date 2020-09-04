@@ -58,7 +58,15 @@ class TaskListData {
         temp[index] = item;
       }
       else if (index != null && temp[index] != null) {
-        temp[nonIndexedTail] = temp[index];
+        // Scan the list for an empty element and assign the "blocking" task to
+        // that element
+        int emptyIndex = nonIndexedTail;
+        for (int n = 0; n < temp.length; n++) {
+          if (temp[n] == null) {
+            emptyIndex = n;
+          }
+        }
+        temp[emptyIndex] = temp[index];
         temp[index] = item;
       }
       else {
@@ -89,7 +97,7 @@ class TaskListData {
       if (taskList[i].data.repeatDays.contains(true)) {
         int id = taskList[i].data.id;
         bool present = false;
-        for (int n = 0; n < repeatTaskTable.length; n++) {
+        for (int n = 0; n < repeatTasks.length; n++) {
           if (repeatTasks[n].data.id == id) {
             present = true;
             break;

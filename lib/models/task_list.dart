@@ -43,7 +43,6 @@ class TaskList extends IListModel<Data> {
     for (int i = 0; i < _list.length; i++) {
       TaskListItem item = _list[i];
       if (item.isDeleted) {
-        print("Task ${item.data.text} is deleted");
         _list.removeAt(i);
         i--;
         continue;
@@ -56,8 +55,8 @@ class TaskList extends IListModel<Data> {
       // Set head and tail values
       if (i != 0) {
         TaskListItem prevItem = _list[i - 1];
-        if (item.data.isScheduled &&
-            !prevItem.data.isScheduled) {
+        if (item.data.isScheduled && !prevItem.data.isScheduled &&
+            !isHeadFound) {
           // Set initial head and tail values
           _timedHead = i;
           _timedTail = i;
@@ -72,7 +71,6 @@ class TaskList extends IListModel<Data> {
       }
       // Otherwise just leave the default values of 0 and 0
     }
-    print("list length is ${_list.length}");
     // Add the spacer widget to the end of the list
     _list.add(null);
     // Update saved indices for each task in the newly constructed list
@@ -101,11 +99,9 @@ class TaskList extends IListModel<Data> {
     }
     else {
       if (prevPos != null && prevPos != _listLength) {
-        print("adding at prev pos: $prevPos");
         _list.insert(prevPos, item);
       }
       else {
-        print("adding at end: ${_numTasks -1}");
         _list.insert(_numTasks - 1, item);
       }
     }

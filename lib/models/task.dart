@@ -40,10 +40,14 @@ class Task {
 
   Task(this._listItemData, this._taskList, this._data) {
     // Initialize this object
-    _isLocked = _taskList.isLocked();
+    _isLocked = _taskList?.isLocked() ?? false;
     _updateStatus();
-    cancelNotifications(_data);
-    _scheduleNotifications(_data);
+    TimeOfDay now = TimeOfDay.now();
+    if (_data.startTime != null && Utils.createTimeStamp(now.hour, now.minute) <
+        Utils.createTimeStamp(_data.startTime.hour, _data.startTime.minute)) {
+      cancelNotifications(_data);
+      _scheduleNotifications(_data);
+    }
     // Initialize _listItemData values
     _listItemData.text = _data.text;
     _listItemData.textDecoration = _isExpired ? TextDecoration.lineThrough :
