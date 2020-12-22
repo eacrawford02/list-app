@@ -27,6 +27,15 @@ class HomePageState extends State<HomePage> {
   TaskList _currentTasks;
   TaskList _futureTasks;
 
+  static void scheduleDailyNotifications() async {
+    print("object bruh");
+    TaskListData listData = TaskListData(DateTime.now());
+    List<TaskListItem> taskList = await listData.loadTasks();
+    taskList.forEach((element) {
+      Task(element.listItemData, null, element.data);
+    });
+  }
+
   void _init() {
     _currentTasks = TaskList(
         DateTime.now(),
@@ -71,19 +80,13 @@ class HomePageState extends State<HomePage> {
     // Set end of day timer (for if the app is closed) to schedule future
     // notifications
     AndroidAlarmManager.periodic(
-      Duration(days: 1),
+      Duration(seconds: 1),
       0,
-      () async {
-        TaskListData listData = TaskListData(DateTime.now());
-        List<TaskListItem> taskList = await listData.loadTasks();
-        taskList.forEach((element) {
-          Task(element.listItemData, null, element.data);
-        });
-      },
+      scheduleDailyNotifications,
       startAt: DateTime(
         DateTime.now().year,
         DateTime.now().month,
-        DateTime.now().add(Duration(days: 1)).day,
+        DateTime.now().add(Duration(seconds: 1)).day,
         0,
         1 // TODO: try changing this (minutes) to zero
       ),

@@ -53,7 +53,10 @@ class TaskList extends IListModel<Data> {
         _numCompletedTasks++;
       }
       // Set head and tail values
-      if (i != 0) {
+      if (i == 0 && item.data.isScheduled) {
+        isHeadFound = true;
+      }
+      else if (i != 0) {
         TaskListItem prevItem = _list[i - 1];
         if (item.data.isScheduled && !prevItem.data.isScheduled &&
             !isHeadFound) {

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:listapp/models/task_list.dart';
 import 'package:listapp/widgets/list_item.dart';
 import 'package:sqflite/sqflite.dart';
@@ -41,7 +40,6 @@ class TaskListData {
     List<TaskListItem> repeatTasks = List();
     // Sort scheduled tasks based on index
     List<TaskListItem> temp = List(scheduledTaskTable.length);
-    int nonIndexedTail = 0;
     for (int i = 0; i < scheduledTaskTable.length; i++) {
       int id = scheduledTaskTable[i]["taskId"];
       int index = scheduledTaskTable[i]["taskIndex"];
@@ -57,23 +55,30 @@ class TaskListData {
       if (index != null && temp[index] == null) {
         temp[index] = item;
       }
-      else if (index != null && temp[index] != null) {
-        // Scan the list for an empty element and assign the "blocking" task to
-        // that element
-        int emptyIndex = nonIndexedTail;
+      else {
+        // Scan the list for an empty element
+        int emptyIndex = 0;
+        bool indexIsEmpty = false;
         for (int n = 0; n < temp.length; n++) {
           if (temp[n] == null) {
             emptyIndex = n;
+            indexIsEmpty = true;
           }
         }
-        temp[emptyIndex] = temp[index];
-        temp[index] = item;
+        if (!indexIsEmpty) {
+          throw Exception("An empty index could not be found");
+        }
+        // If the desired index has already been written to, assign the
+        // "blocking" task to the empty index
+        if (index != null && temp[index] != null) {
+          temp[emptyIndex] = temp[index];
+          temp[index] = item;
+        }
+        // Otherwise, simply add the item at the empty index
+        else {
+          temp[emptyIndex] = item;
+        }
       }
-      else {
-        // Simply add the item on to the end of this list
-        temp[nonIndexedTail] = item;
-      }
-      nonIndexedTail++;
     }
     // Load repeat TaskListItem objects
     for (int i = 0; i < repeatTaskTable.length; i++) {

@@ -53,7 +53,7 @@ class Task {
     _listItemData.textDecoration = _isExpired ? TextDecoration.lineThrough :
         TextDecoration.none;
     _listItemData.bottomText = _timeDisplay;
-    _listItemData.isHighlighted = _isActive;
+    _listItemData.isHighlighted = _isActive && !_data.isDone;
     _listItemData.highlightColor = Colors.blue;
     // Populate widget with checkbox and buttons
     _listItemData.leftAction = (BuildContext context) {
