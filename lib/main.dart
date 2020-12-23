@@ -16,6 +16,12 @@ class ListApp extends StatelessWidget {
 
     return MaterialApp (
       title: "List",
+      theme: ThemeData(
+        primaryColor: Colors.white,
+        accentColor: Color.fromRGBO(235, 173, 209, 1),
+        disabledColor: Colors.black38,
+        textTheme: TextTheme(bodyText2: TextStyle(color: Colors.black))
+      ),
       home: HomePage()
     );
   }

@@ -62,7 +62,9 @@ class TabbedListBarState extends State<TabbedListBar>
             forceElevated: innerBoxIsScrolled,
             bottom: TabBar(
               controller: _controller,
-              tabs: _tabs
+              tabs: _tabs,
+              labelColor: Theme.of(context).accentColor,
+              unselectedLabelColor: Theme.of(context).textTheme.bodyText2.color
             )
           )
         ];

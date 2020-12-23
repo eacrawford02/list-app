@@ -28,7 +28,6 @@ class HomePageState extends State<HomePage> {
   TaskList _futureTasks;
 
   static void scheduleDailyNotifications() async {
-    print("object bruh");
     TaskListData listData = TaskListData(DateTime.now());
     List<TaskListItem> taskList = await listData.loadTasks();
     taskList.forEach((element) {
@@ -79,20 +78,22 @@ class HomePageState extends State<HomePage> {
     );
     // Set end of day timer (for if the app is closed) to schedule future
     // notifications
-    AndroidAlarmManager.periodic(
-      Duration(seconds: 1),
-      0,
-      scheduleDailyNotifications,
-      startAt: DateTime(
-        DateTime.now().year,
-        DateTime.now().month,
-        DateTime.now().add(Duration(seconds: 1)).day,
-        0,
-        1 // TODO: try changing this (minutes) to zero
-      ),
-      exact: true,
-      rescheduleOnReboot: true
-    );
+    AndroidAlarmManager.initialize().then((value) {
+      AndroidAlarmManager.periodic(
+          Duration(days: 1),
+          0,
+          scheduleDailyNotifications,
+          startAt: DateTime(
+              DateTime.now().year,
+              DateTime.now().month,
+              DateTime.now().add(Duration(days: 1)).day,
+              0,
+              1 // TODO: try changing this (minutes) to zero
+          ),
+          exact: true,
+          rescheduleOnReboot: true
+      );
+    });
   }
 
   @override
@@ -158,6 +159,7 @@ class HomePageState extends State<HomePage> {
                   mini: true,
                   elevation: (_currentTasks.getNumTasks() == 0 ||
                       _currentTasks.isLocked()) ? 0 : null,
+                  foregroundColor: Colors.white,
                   child: Icon(Icons.done),
                   onPressed: (_currentTasks.getNumTasks() == 0 ||
                       _currentTasks.isLocked()) ? null : () {
@@ -183,7 +185,7 @@ class HomePageState extends State<HomePage> {
                             ],
                           ),
                           actions: <Widget>[
-                            FlatButton(
+                            TextButton(
                               child: Text("Cancel"),
                               onPressed: () => Navigator.of(context).pop(),
                             ),
@@ -192,7 +194,7 @@ class HomePageState extends State<HomePage> {
                                 onPressed: () {
                                   _currentTasks.lockTasks();
                                   Navigator.of(context).pop();
-                                  onDataChange(true);
+                                  onDataChange(true); // TODO: not updating tasks
                                 }
                             )
                           ],
@@ -202,6 +204,8 @@ class HomePageState extends State<HomePage> {
                   }
                 ) : Container(),
                 FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).accentColor,
                   child: Icon(Icons.add),
                   elevation: _data.tabbedTasks.isLocked() ? 0 : null,
                   onPressed: !_data.tabbedTasks.isLocked() ?
@@ -209,6 +213,7 @@ class HomePageState extends State<HomePage> {
                 ),
                 _data.tabbedTasks == _currentTasks ? FloatingActionButton(
                   mini: true,
+                  foregroundColor: Colors.white,
                   child: Text(
                     "${_currentTasks.getNumTasks() > 0 ?
                     (_currentTasks.getNumCompletedTasks() /
@@ -218,6 +223,7 @@ class HomePageState extends State<HomePage> {
                   onPressed: null
                 ) : FloatingActionButton(
                   mini: true,
+                  foregroundColor: Colors.white,
                   child: Icon(Icons.today),
                   onPressed: () async {
                     DateTime newDate = await showDatePicker(

@@ -35,56 +35,77 @@ class ListItemState extends State<ListItem> {
         axis: Axis.vertical,
         sizeFactor: widget.animation,
         child: Card(
-          shape: Border(
-            bottom: data.isHighlighted ?
-                BorderSide(color: data.highlightColor) : BorderSide.none
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)
           ),
-          child: Padding(
-            padding: const EdgeInsets.only(
-              left: 8,
-              right: 8,
-              top: 2,
-              bottom: 2
+          child: ClipPath(
+            clipper: ShapeBorderClipper(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)
+              )
             ),
-            child: Row(
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.only(
-                    right: 8
-                  ),
-                  child: data.leftAction(context)
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(
+                    bottom: data.isHighlighted ?
+                    BorderSide(color: data.highlightColor) : BorderSide.none
+                )
+              ),
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  left: 8,
+                  right: 8,
+                  top: 2,
+                  bottom: 2
                 ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        data.title,
-                        style: TextStyle(
-                          //fontSize: 18, // TODO: fix later
-                          fontWeight: FontWeight.bold
-                        )
+                child: Row(
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        right: 8
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: 8,
-                          bottom: 8
-                        ),
-                        child: Text(
-                          data.text,
-                          style: TextStyle(
-                            fontSize: 18,
-                            decoration: data.textDecoration
+                      child: data.leftAction(context)
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            data.title,
+                            style: TextStyle(
+                              //fontSize: 18, // TODO: fix later
+                              fontWeight: FontWeight.bold
+                            )
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: 8,
+                              bottom: 8
+                            ),
+                            child: Text(
+                              data.text,
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: data.isDisabled ?
+                                    Theme.of(context).disabledColor : null,
+                                decoration: data.textDecoration
+                              )
+                            )
+                          ),
+                          Text(
+                            data.bottomText,
+                            style: TextStyle(
+                              color: data.isDisabled ?
+                                  Theme.of(context).disabledColor : null
+                            )
                           )
-                        )
-                      ),
-                      Text(data.bottomText)
-                    ]
-                  )
-                ),
-                data.rightAction(context)
-              ]
-            )
+                        ]
+                      )
+                    ),
+                    data.rightAction(context)
+                  ]
+                )
+            ))
           )
         )
       )
@@ -101,6 +122,8 @@ class ListItemData {
 
   String text;
 
+  Color textColor;
+
   TextDecoration textDecoration;
 
   String bottomText;
@@ -111,6 +134,8 @@ class ListItemData {
 
   Color highlightColor;
 
+  bool isDisabled;
+
   ListItemData({
     GetChildWidgets leftAction,
     this.title : "",
@@ -119,7 +144,8 @@ class ListItemData {
     this.bottomText : "",
     GetChildWidgets rightAction,
     this.isHighlighted : false,
-    this.highlightColor : Colors.blue
+    this.highlightColor : const Color.fromRGBO(158, 216, 250, 1),
+    this.isDisabled : false
   }) {
     this.leftAction = leftAction ?? (BuildContext c) => null;
     this.rightAction = rightAction ?? (BuildContext c) => null;

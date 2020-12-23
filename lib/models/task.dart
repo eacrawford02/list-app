@@ -50,11 +50,12 @@ class Task {
     }
     // Initialize _listItemData values
     _listItemData.text = _data.text;
+    _listItemData.isDisabled = _isLocked;
     _listItemData.textDecoration = _isExpired ? TextDecoration.lineThrough :
         TextDecoration.none;
     _listItemData.bottomText = _timeDisplay;
-    _listItemData.isHighlighted = _isActive && !_data.isDone;
-    _listItemData.highlightColor = Colors.blue;
+    _listItemData.isHighlighted = _isActive && !_isLocked && !_data.isDone;
+    _listItemData.highlightColor = const Color.fromRGBO(158, 216, 250, 1);
     // Populate widget with checkbox and buttons
     _listItemData.leftAction = (BuildContext context) {
       bool isToday = Utils.dateToString(_data.date) ==
